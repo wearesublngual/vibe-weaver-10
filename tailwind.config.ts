@@ -57,6 +57,15 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+        phosphor: "hsl(var(--phosphor))",
+        electric: "hsl(var(--electric))",
+        glitch: "hsl(var(--glitch))",
+        void: "hsl(var(--void))",
+        signal: "hsl(var(--signal))",
+      },
+      fontFamily: {
+        sans: ['IBM Plex Sans', 'system-ui', 'sans-serif'],
+        mono: ['JetBrains Mono', 'Courier New', 'monospace'],
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -84,6 +93,14 @@ export default {
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        "glitch": "glitch 0.3s infinite",
+        "pulse-glow": "pulse-glow 2s ease-in-out infinite",
+        "scan-line": "scan-line 8s linear infinite",
+      },
+      boxShadow: {
+        'glow-phosphor': 'var(--glow-phosphor)',
+        'glow-electric': 'var(--glow-electric)',
+        'deep': 'var(--shadow-deep)',
       },
     },
   },
