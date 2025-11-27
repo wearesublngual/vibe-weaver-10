@@ -8,52 +8,53 @@ All colors MUST be HSL.
 
 @layer base {
   :root {
-    /* Sublingual Visualizer - Liminal Broadcast Theme */
-    --background: 0 0% 3%;
-    --foreground: 150 100% 85%;
+    /* SOMA Visualizer - Deep Blue / Hot Pink Theme */
+    --background: 235 80% 15%;
+    --foreground: 330 100% 95%;
 
-    --card: 0 0% 6%;
-    --card-foreground: 150 100% 85%;
+    --card: 235 70% 12%;
+    --card-foreground: 330 100% 95%;
 
-    --popover: 0 0% 8%;
-    --popover-foreground: 150 100% 85%;
+    --popover: 235 75% 10%;
+    --popover-foreground: 330 100% 95%;
 
-    --primary: 150 100% 50%;
-    --primary-foreground: 0 0% 5%;
+    --primary: 330 100% 60%;
+    --primary-foreground: 235 80% 10%;
 
-    --secondary: 180 100% 45%;
-    --secondary-foreground: 0 0% 5%;
+    --secondary: 280 80% 55%;
+    --secondary-foreground: 0 0% 100%;
 
-    --muted: 0 0% 15%;
-    --muted-foreground: 150 30% 60%;
+    --muted: 235 50% 25%;
+    --muted-foreground: 330 40% 70%;
 
-    --accent: 280 100% 60%;
-    --accent-foreground: 0 0% 100%;
+    --accent: 330 100% 65%;
+    --accent-foreground: 235 80% 10%;
 
     --destructive: 0 80% 55%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 150 50% 20%;
-    --input: 0 0% 12%;
-    --ring: 150 100% 50%;
+    --border: 280 60% 30%;
+    --input: 235 60% 20%;
+    --ring: 330 100% 60%;
 
     --radius: 0.25rem;
 
-    /* Custom Sublingual tokens */
-    --phosphor: 150 100% 50%;
-    --electric: 180 100% 45%;
-    --glitch: 280 100% 60%;
-    --void: 0 0% 3%;
-    --signal: 150 100% 65%;
+    /* Custom SOMA tokens */
+    --phosphor: 330 100% 60%;
+    --electric: 280 80% 55%;
+    --glitch: 330 100% 70%;
+    --void: 235 80% 12%;
+    --signal: 330 80% 75%;
+    --deep-blue: 235 80% 25%;
     
     /* Gradients */
-    --gradient-liminal: linear-gradient(135deg, hsl(150 100% 50% / 0.1), hsl(280 100% 60% / 0.1));
-    --gradient-transmission: linear-gradient(180deg, hsl(0 0% 3%), hsl(0 0% 6%));
+    --gradient-liminal: linear-gradient(135deg, hsl(330 100% 60% / 0.1), hsl(280 80% 55% / 0.1));
+    --gradient-transmission: linear-gradient(180deg, hsl(235 80% 15%), hsl(235 80% 8%));
     
     /* Effects */
-    --glow-phosphor: 0 0 20px hsl(150 100% 50% / 0.5), 0 0 40px hsl(150 100% 50% / 0.3);
-    --glow-electric: 0 0 20px hsl(180 100% 45% / 0.5), 0 0 40px hsl(180 100% 45% / 0.3);
-    --shadow-deep: 0 10px 40px -10px hsl(0 0% 0% / 0.8);
+    --glow-phosphor: 0 0 20px hsl(330 100% 60% / 0.5), 0 0 40px hsl(330 100% 60% / 0.3);
+    --glow-electric: 0 0 20px hsl(280 80% 55% / 0.5), 0 0 40px hsl(280 80% 55% / 0.3);
+    --shadow-deep: 0 10px 40px -10px hsl(235 80% 5% / 0.8);
     
     /* Transitions */
     --transition-glitch: all 0.1s cubic-bezier(0.4, 0, 1, 1);
@@ -71,9 +72,13 @@ All colors MUST be HSL.
     font-family: 'IBM Plex Sans', system-ui, -apple-system, sans-serif;
   }
 
-  /* Sublingual Typography */
+  /* SOMA Typography */
   .font-mono {
     font-family: 'JetBrains Mono', 'Courier New', monospace;
+  }
+
+  .font-hindi {
+    font-family: 'Noto Sans Devanagari', 'IBM Plex Sans', sans-serif;
   }
 
   /* Glitch animation */
@@ -99,12 +104,21 @@ All colors MUST be HSL.
     100% { transform: translateY(100vh); }
   }
 
+  @keyframes float {
+    0%, 100% { transform: translateY(0px) rotate(0deg); }
+    50% { transform: translateY(-10px) rotate(1deg); }
+  }
+
   .animate-glitch {
     animation: glitch 0.3s infinite;
   }
 
   .animate-pulse-glow {
     animation: pulse-glow 2s ease-in-out infinite;
+  }
+
+  .animate-float {
+    animation: float 6s ease-in-out infinite;
   }
 
   /* Scanline effect */
@@ -118,5 +132,38 @@ All colors MUST be HSL.
     animation: scan-line 8s linear infinite;
     pointer-events: none;
     z-index: 9999;
+  }
+
+  /* Layered text effect */
+  .soma-title {
+    position: relative;
+    display: inline-block;
+  }
+
+  .soma-title .hindi-layer {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 1.3em;
+    color: hsl(var(--deep-blue));
+    z-index: 0;
+    opacity: 0.9;
+    font-weight: 900;
+  }
+
+  .soma-title .english-layer {
+    position: relative;
+    z-index: 1;
+    -webkit-text-stroke: 2px hsl(var(--phosphor));
+    color: transparent;
+    font-weight: 900;
+  }
+
+  .soma-title .english-fill {
+    position: relative;
+    z-index: 2;
+    color: hsl(var(--phosphor));
+    font-weight: 900;
   }
 }

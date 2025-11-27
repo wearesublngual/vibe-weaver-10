@@ -62,6 +62,7 @@ export default {
         glitch: "hsl(var(--glitch))",
         void: "hsl(var(--void))",
         signal: "hsl(var(--signal))",
+        "deep-blue": "hsl(var(--deep-blue))",
       },
       fontFamily: {
         sans: ['IBM Plex Sans', 'system-ui', 'sans-serif'],
