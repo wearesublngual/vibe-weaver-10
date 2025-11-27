@@ -189,54 +189,89 @@ export class AudioEffectsChain {
     this.feedbackGain.gain.setTargetAtTime(feedback, now, 0.05);
     this.delayNode.delayTime.setTargetAtTime(delayTime, now, 0.1);
     
+    // Store computed echo values for debug
+    this._debugValues.echo = { wet: delayWet, feedback, delayTime };
+    
     // === DRIFT MAPPING ===
-    // 0-30: flat, 30-70: subtle movement, 70-100: resonant sweeps
+    // MORE AGGRESSIVE: Lower frequencies, faster LFO, higher Q
     const drift = this.currentParams.drift;
     
-    // Filter frequency range (higher drift = more filter movement)
-    const baseFreq = 20000 - drift * 15000; // 20kHz down to 5kHz
-    const lfoDepth = drift < 0.3 
-      ? drift / 0.3 * 500  // 0-500Hz modulation
+    // Filter frequency: cuts much deeper now
+    const baseFreq = drift < 0.3
+      ? 20000 - drift / 0.3 * 8000  // 20kHz → 12kHz (subtle)
       : drift < 0.7
-        ? 500 + (drift - 0.3) / 0.4 * 2000  // 500-2500Hz
-        : 2500 + (drift - 0.7) / 0.3 * 3000; // 2500-5500Hz
+        ? 12000 - (drift - 0.3) / 0.4 * 8000  // 12kHz → 4kHz (noticeable)
+        : 4000 - (drift - 0.7) / 0.3 * 2500;  // 4kHz → 1.5kHz (dramatic)
     
-    // Q increases subtly with drift for resonance
-    const filterQ = 1 + drift * 3; // 1-4 Q
+    // LFO depth: more aggressive modulation
+    const lfoDepth = drift < 0.3 
+      ? drift / 0.3 * 2000  // 0-2000Hz modulation
+      : drift < 0.7
+        ? 2000 + (drift - 0.3) / 0.4 * 4000  // 2000-6000Hz
+        : 6000 + (drift - 0.7) / 0.3 * 4000; // 6000-10000Hz
     
-    // LFO speed varies with drift
-    const lfoSpeed = 0.1 + drift * 0.4; // 0.1-0.5 Hz
+    // Q: more resonant
+    const filterQ = 1 + drift * 8; // 1-9 Q (was 1-4)
+    
+    // LFO speed: MUCH faster
+    const lfoSpeed = 0.2 + drift * 1.8; // 0.2-2.0 Hz (was 0.1-0.5)
     
     this.filterNode.frequency.setTargetAtTime(baseFreq, now, 0.1);
     this.filterNode.Q.setTargetAtTime(filterQ, now, 0.1);
     this.filterLfoGain.gain.setTargetAtTime(lfoDepth, now, 0.1);
     this.filterLfo.frequency.setTargetAtTime(lfoSpeed, now, 0.1);
     
+    // Store computed drift values for debug
+    this._debugValues.drift = { baseFreq, lfoDepth, filterQ, lfoSpeed };
+    
     // === BREAK MAPPING ===
-    // 0-20: off, 20-50: breathing, 50-80: rhythmic, 80-100: stutters
+    // FIXED: More aggressive gating
     const brk = this.currentParams.break_;
+    
+    let gateDepth = 0;
+    let gateRate = 0;
     
     if (brk < 0.2) {
       // Off - no gating
-      this.breakLfoGain.gain.setTargetAtTime(0, now, 0.05);
+      gateDepth = 0;
+      gateRate = 0.5;
     } else {
-      // Active gating
-      const gateDepth = brk < 0.5
-        ? (brk - 0.2) / 0.3 * 0.2  // 0-20% depth (breathing)
+      // Active gating - MUCH more aggressive depth
+      gateDepth = brk < 0.5
+        ? (brk - 0.2) / 0.3 * 0.5  // 0-50% depth (breathing)
         : brk < 0.8
-          ? 0.2 + (brk - 0.5) / 0.3 * 0.3  // 20-50% depth (rhythmic)
-          : 0.5 + (brk - 0.8) / 0.2 * 0.3; // 50-80% depth (stutters)
+          ? 0.5 + (brk - 0.5) / 0.3 * 0.3  // 50-80% depth (rhythmic)
+          : 0.8 + (brk - 0.8) / 0.2 * 0.2; // 80-100% depth (stutters)
       
       // Rate increases with break level
-      const gateRate = brk < 0.5
-        ? 0.5 + brk * 2  // 0.5-1.5 Hz (slow breathing)
+      gateRate = brk < 0.5
+        ? 0.5 + (brk - 0.2) * 3  // 0.5-1.4 Hz (slow breathing)
         : brk < 0.8
-          ? 1.5 + (brk - 0.5) * 6  // 1.5-3.3 Hz
-          : 3.3 + (brk - 0.8) * 10; // 3.3-5.3 Hz
-      
-      this.breakLfoGain.gain.setTargetAtTime(gateDepth, now, 0.1);
-      this.breakLfo.frequency.setTargetAtTime(gateRate, now, 0.1);
+          ? 1.4 + (brk - 0.5) * 8  // 1.4-3.8 Hz
+          : 3.8 + (brk - 0.8) * 12; // 3.8-6.2 Hz
     }
+    
+    this.breakLfoGain.gain.setTargetAtTime(gateDepth, now, 0.05);
+    this.breakLfo.frequency.setTargetAtTime(gateRate, now, 0.1);
+    
+    // Also directly modulate gate gain for more obvious effect
+    // The shaper approach wasn't working well, so add direct modulation
+    const gateBase = 1 - gateDepth * 0.5; // Keep base volume higher
+    this.gateGain.gain.setTargetAtTime(gateBase, now, 0.05);
+    
+    // Store computed break values for debug
+    this._debugValues.break_ = { gateDepth, gateRate, gateBase };
+  }
+  
+  // Debug values storage
+  private _debugValues = {
+    echo: { wet: 0, feedback: 0, delayTime: 0 },
+    drift: { baseFreq: 20000, lfoDepth: 0, filterQ: 1, lfoSpeed: 0.1 },
+    break_: { gateDepth: 0, gateRate: 0, gateBase: 1 }
+  };
+  
+  getDebugValues() {
+    return this._debugValues;
   }
   
   getCurrentParams(): AudioEffectParams {
