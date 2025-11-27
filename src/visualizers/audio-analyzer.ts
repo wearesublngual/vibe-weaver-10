@@ -40,7 +40,7 @@ export class AudioAnalyzer {
   
   // Auto-gain normalization
   private maxObservedEnergy = 0.1;
-  private gainDecay = 0.999; // Slowly forget max
+  private gainDecay = 0.995; // Faster adaptation to volume changes
   
   constructor() {}
   
@@ -89,20 +89,22 @@ export class AudioAnalyzer {
     }
     this.spectralFlux = flux / this.dataArray.length * 10; // Normalize
     
-    // Asymmetric smoothing: fast attack, slow release
-    // This makes the visuals "punch" on transients but flow smoothly otherwise
-    this.bass = this.asymmetricSmooth(this.bass, combinedBass, 0.6, 0.05);
-    this.lowMid = this.asymmetricSmooth(this.lowMid, rawLowMid, 0.5, 0.08);
-    this.mid = this.asymmetricSmooth(this.mid, rawMid, 0.4, 0.1);
+    // Asymmetric smoothing: fast attack, faster release for dynamic range
+    // This makes the visuals "punch" on transients but recover quickly
+    this.bass = this.asymmetricSmooth(this.bass, combinedBass, 0.6, 0.15);
+    this.lowMid = this.asymmetricSmooth(this.lowMid, rawLowMid, 0.5, 0.15);
+    this.mid = this.asymmetricSmooth(this.mid, rawMid, 0.4, 0.12);
     this.high = this.asymmetricSmooth(this.high, rawHigh + rawHighMid * 0.5, 0.3, 0.12);
     
     // Overall energy (weighted toward bass for dance music)
     const rawEnergy = combinedBass * 0.4 + rawLowMid * 0.25 + rawMid * 0.2 + rawHigh * 0.15;
-    this.energy = this.asymmetricSmooth(this.energy, rawEnergy, 0.5, 0.08);
+    // Apply soft compression to prevent constant maxing
+    const compressedEnergy = Math.pow(rawEnergy, 0.7);
+    this.energy = this.asymmetricSmooth(this.energy, compressedEnergy, 0.5, 0.15);
     
-    // Auto-gain: normalize to observed maximum
+    // Auto-gain: normalize to observed maximum with headroom
     this.maxObservedEnergy = Math.max(this.maxObservedEnergy * this.gainDecay, this.energy);
-    const normalizedEnergy = this.energy / Math.max(this.maxObservedEnergy, 0.1);
+    const normalizedEnergy = (this.energy / Math.max(this.maxObservedEnergy, 0.1)) * 0.85; // 15% headroom
     
     // Peak detection with decay
     this.peakBass = Math.max(this.peakBass * 0.92, this.bass);
