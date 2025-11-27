@@ -137,12 +137,13 @@ void main() {
 }
 `;
 
-// Render shader - beautiful visualization from state
+// Render shader - transforms uploaded image through psychedelic effects
 export const renderShader = `#version 300 es
 precision highp float;
 
-uniform sampler2D u_state;
-uniform sampler2D u_noise;
+uniform sampler2D u_state;    // Physics state for modulation
+uniform sampler2D u_noise;    // Noise for organic variation
+uniform sampler2D u_image;    // User uploaded image to transform
 uniform float u_time;
 
 uniform float u_bass;
@@ -181,6 +182,15 @@ vec2 kaleidoscope(vec2 uv, float segments) {
   angle = mod(angle, segmentAngle);
   angle = abs(angle - segmentAngle * 0.5);
   return vec2(cos(angle), sin(angle)) * r + 0.5;
+}
+
+vec3 rgb2hsv(vec3 c) {
+  vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
+  vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));
+  vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r));
+  float d = q.x - min(q.w, q.y);
+  float e = 1.0e-10;
+  return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
 }
 
 vec3 hsv2rgb(vec3 c) {
@@ -222,69 +232,90 @@ vec3 richPalette(float t, float velocity, float energy) {
 void main() {
   vec2 coord = v_uv;
   
-  // Apply coordinate transforms
+  // Get state for audio-reactive modulation
+  vec4 state = texture(u_state, v_uv);
+  float velocity = state.y;
+  float energy = state.z;
+  float beat = state.w;
+  
+  // Apply coordinate transforms based on dose and effects
+  
+  // 1. RECURSION - hyperbolic depth
   if (u_recursion * u_dose > 0.01) {
     coord = logPolar(coord, u_recursion * u_dose * 0.8);
   }
   
+  // 2. SYMMETRY - kaleidoscope
   float segments = 3.0 + u_symmetry * u_dose * 9.0;
   if (u_symmetry * u_dose > 0.1) {
     coord = kaleidoscope(coord, segments);
   }
   
-  // Breathing distortion
+  // 3. BREATHING - radial pulsing (audio-reactive)
   if (u_breathing * u_dose > 0.01) {
     vec2 centered = coord - 0.5;
     float r = length(centered);
     float breathPhase = u_time * 2.0 + u_bass * 3.0;
     float breathWave = sin(r * 8.0 - breathPhase) * 0.5 + 0.5;
-    float scale = 1.0 + breathWave * u_breathing * u_dose * 0.1;
+    float scale = 1.0 + breathWave * u_breathing * u_dose * 0.15;
     coord = centered * scale + 0.5;
   }
   
-  // Flow distortion
+  // 4. FLOW - warping distortion
   if (u_flow * u_dose > 0.01) {
     vec4 n = texture(u_noise, coord * 0.5 + u_time * 0.02);
     vec2 flow = vec2(
       sin((n.x - 0.5) * TAU + u_time * 0.3),
       cos((n.y - 0.5) * TAU + u_time * 0.25)
     );
-    coord += flow * u_flow * u_dose * 0.05;
+    // Audio-reactive flow intensity
+    float flowMod = 1.0 + u_lowMid * 0.5;
+    coord += flow * u_flow * u_dose * 0.08 * flowMod;
   }
   
-  vec4 state = texture(u_state, coord);
-  float phase = state.x;
-  float velocity = state.y;
-  float energy = state.z;
-  float beat = state.w;
+  // Sample the uploaded image with transformed coordinates
+  vec2 sampleCoord = clamp(coord, 0.001, 0.999);
+  vec3 color = texture(u_image, sampleCoord).rgb;
   
-  vec4 noise = texture(u_noise, v_uv);
+  // 5. SATURATION - color transformation
+  if (u_saturation * u_dose > 0.01) {
+    vec3 hsv = rgb2hsv(color);
+    
+    // Hue rotation (audio-reactive)
+    hsv.x += u_saturation * u_dose * 0.1 * sin(u_time * 0.5 + u_energy * TAU);
+    hsv.x = fract(hsv.x);
+    
+    // Saturation boost
+    hsv.y = hsv.y * (1.0 + u_saturation * u_dose * 0.6);
+    hsv.y = min(hsv.y, 1.0);
+    
+    // Value modulation with audio
+    hsv.z = hsv.z * (0.9 + u_saturation * u_dose * 0.2 + u_energy * 0.1);
+    
+    color = hsv2rgb(hsv);
+  }
   
-  // Color from velocity-aware palette
-  vec3 color = velocityPalette(phase, velocity, energy, u_saturation);
+  // Add high frequency shimmer
+  vec3 shimmer = vec3(
+    sin(u_time * 12.0 + v_uv.x * 30.0) * 0.5 + 0.5,
+    sin(u_time * 12.0 + v_uv.y * 30.0 + 2.0) * 0.5 + 0.5,
+    sin(u_time * 12.0 + (v_uv.x + v_uv.y) * 15.0 + 4.0) * 0.5 + 0.5
+  );
+  color += shimmer * u_high * u_saturation * u_dose * 0.1;
   
-  // Blend with rich palette
-  vec3 rich = richPalette(phase, velocity, energy);
-  color = mix(color, rich, 0.4 + u_saturation * 0.3);
-  
-  // Noise variation
-  color += (noise.xyz - 0.5) * 0.05 * u_flow;
+  // Beat flash - brief white pulse
+  color = mix(color, vec3(1.0, 0.98, 0.95), beat * u_dose * 0.4);
   
   // Vignette
   float dist = length(v_uv - 0.5);
-  float vignette = 1.0 - dist * u_dose * 1.4;
+  float vignette = 1.0 - dist * u_dose * 1.2;
   vignette = smoothstep(0.0, 1.0, vignette);
-  vignette = max(vignette, 0.15);
-  
-  // Beat flash
-  vec3 beatColor = vec3(1.0, 0.95, 0.9);
-  color = mix(color, beatColor, beat * 0.5 * u_dose);
-  
+  vignette = max(vignette, 0.2);
   color *= vignette;
-  color *= 1.0 + u_breathing * 0.2;
   
-  color = max(color, vec3(0.015));
-  color = pow(color, vec3(1.0 / 2.2));
+  // Final adjustments
+  color = clamp(color, 0.0, 1.0);
+  color = pow(color, vec3(1.0 / 2.2)); // Gamma
   
   fragColor = vec4(color, 1.0);
 }

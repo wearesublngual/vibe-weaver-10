@@ -31,6 +31,10 @@ export class OscillatorEngine implements VisualizerEngine {
   private noiseTexture: WebGLTexture | null = null;
   private noiseTime = 0;
   
+  // User image texture
+  private imageTexture: WebGLTexture | null = null;
+  private hasUserImage = false;
+  
   // Uniform locations
   private updateUniforms: Record<string, WebGLUniformLocation | null> = {};
   private renderUniforms: Record<string, WebGLUniformLocation | null> = {};
@@ -341,6 +345,11 @@ export class OscillatorEngine implements VisualizerEngine {
     gl.bindTexture(gl.TEXTURE_2D, this.noiseTexture);
     gl.uniform1i(this.renderUniforms.u_noise, 1);
     
+    // Bind user image texture (or use state as fallback)
+    gl.activeTexture(gl.TEXTURE2);
+    gl.bindTexture(gl.TEXTURE_2D, this.hasUserImage && this.imageTexture ? this.imageTexture : currentState.texture);
+    gl.uniform1i(this.renderUniforms.u_image, 2);
+    
     // Uniforms
     gl.uniform1f(this.renderUniforms.u_time, this.time);
     gl.uniform1f(this.renderUniforms.u_bass, this.lastAudio.bass);
@@ -377,5 +386,32 @@ export class OscillatorEngine implements VisualizerEngine {
     if (this.initialized) {
       this.initializeState();
     }
+  }
+  
+  setImage(source: HTMLImageElement | HTMLCanvasElement): void {
+    if (!this.gl) return;
+    
+    const gl = this.gl;
+    
+    // Delete old texture if exists
+    if (this.imageTexture) {
+      gl.deleteTexture(this.imageTexture);
+    }
+    
+    // Create new texture from image
+    this.imageTexture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, this.imageTexture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
+    
+    // Set texture parameters
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.MIRRORED_REPEAT);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.MIRRORED_REPEAT);
+    
+    gl.bindTexture(gl.TEXTURE_2D, null);
+    
+    this.hasUserImage = true;
+    console.log('User image loaded:', source.width, 'x', source.height);
   }
 }
