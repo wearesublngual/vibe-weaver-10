@@ -88,11 +88,7 @@ const Index = () => {
           duration: 0.8,
           delay: 0.7
         }} className="mb-6 text-sm text-muted-foreground leading-relaxed max-w-xl mx-auto">
-            <p className="mb-4">The official album visualizer for SOMA — and a low-stakes, browser-based psychedelic experience simulator based by research from Harvard's Science of Psychedelics and the Qualia Research Institute.<span className="text-phosphor font-medium">SOMA</span> —
-              and, unintentionally (but also very intentionally),
-              a low-stakes, browser-based psychedelic experience simulator
-              inspired by research from Harvard's Science of Psychedelics
-              and the Qualia Research Institute.
+            <p className="mb-4">The official album visualizer for SOMA — and a low-stakes, browser-based psychedelic experience simulator based by research from Harvard's Science of Psychedelics and the Qualia Research Institute.<span className="text-phosphor font-medium">SOMA</span> ​
             </p>
             <p className="font-mono text-xs text-signal/70 leading-loose">All of the perceptual weirdness.
               <br />
