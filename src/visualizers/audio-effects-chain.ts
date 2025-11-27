@@ -193,29 +193,29 @@ export class AudioEffectsChain {
     this._debugValues.echo = { wet: delayWet, feedback, delayTime };
     
     // === DRIFT MAPPING ===
-    // AGGRESSIVE filter movement with 2kHz floor
+    // Noticeable filter movement, less aggressive resonance
     const drift = this.currentParams.drift;
     
-    // Filter frequency: floor of 2kHz, more aggressive cuts
-    const minFreq = 2000;
+    // Filter frequency: floor of 2.5kHz
+    const minFreq = 2500;
     const baseFreq = drift < 0.3
-      ? 18000 - drift / 0.3 * 8000  // 18kHz → 10kHz 
+      ? 18000 - drift / 0.3 * 6000  // 18kHz → 12kHz 
       : drift < 0.7
-        ? 10000 - (drift - 0.3) / 0.4 * 6000  // 10kHz → 4kHz
-        : Math.max(minFreq, 4000 - (drift - 0.7) / 0.3 * 2000);  // 4kHz → 2kHz
+        ? 12000 - (drift - 0.3) / 0.4 * 6000  // 12kHz → 6kHz
+        : Math.max(minFreq, 6000 - (drift - 0.7) / 0.3 * 3500);  // 6kHz → 2.5kHz
     
-    // LFO depth: aggressive but safe
+    // LFO depth: moderate
     const lfoDepth = drift < 0.3 
-      ? drift / 0.3 * 3000  // 0-3000Hz modulation
+      ? drift / 0.3 * 2000  // 0-2000Hz modulation
       : drift < 0.7
-        ? 3000 + (drift - 0.3) / 0.4 * 3000  // 3000-6000Hz
-        : 6000 + (drift - 0.7) / 0.3 * 2000; // 6000-8000Hz (capped to stay above floor)
+        ? 2000 + (drift - 0.3) / 0.4 * 2500  // 2000-4500Hz
+        : 4500 + (drift - 0.7) / 0.3 * 1500; // 4500-6000Hz
     
-    // Q: noticeable resonance
-    const filterQ = 2 + drift * 8; // 2-10 Q for obvious sweep
+    // Q: reduced resonance (less wah-wah)
+    const filterQ = 1.5 + drift * 4; // 1.5-5.5 Q (was 2-10)
     
-    // LFO speed: fast enough to notice
-    const lfoSpeed = 0.3 + drift * 2.0; // 0.3-2.3 Hz
+    // LFO speed: moderate
+    const lfoSpeed = 0.25 + drift * 1.25; // 0.25-1.5 Hz (was 0.3-2.3)
     
     this.filterNode.frequency.setTargetAtTime(baseFreq, now, 0.05);
     this.filterNode.Q.setTargetAtTime(filterQ, now, 0.05);
@@ -226,7 +226,7 @@ export class AudioEffectsChain {
     this._debugValues.drift = { baseFreq, lfoDepth, filterQ, lfoSpeed };
     
     // === BREAK MAPPING ===
-    // Direct gain modulation for obvious volume gating
+    // Starts at 5% instead of 15% for earlier activation
     const brk = this.currentParams.break_;
     
     let gateDepth = 0;
@@ -234,40 +234,40 @@ export class AudioEffectsChain {
     let gateMin = 1;
     let gateMax = 1;
     
-    if (brk < 0.15) {
-      // Off - no gating
+    if (brk < 0.05) {
+      // Off - no gating (only first 5%)
       gateDepth = 0;
       gateRate = 0.5;
       gateMin = 1;
       gateMax = 1;
     } else {
-      // Calculate gate range (min to max volume)
-      // Higher break = deeper cuts (lower minimum)
-      gateMin = brk < 0.4
-        ? 1 - (brk - 0.15) / 0.25 * 0.4  // 1.0 → 0.6 (subtle breathing)
-        : brk < 0.7
-          ? 0.6 - (brk - 0.4) / 0.3 * 0.3  // 0.6 → 0.3 (rhythmic dips)
-          : 0.3 - (brk - 0.7) / 0.3 * 0.2; // 0.3 → 0.1 (dramatic gating)
+      // Calculate gate range - starts much earlier now
+      gateMin = brk < 0.25
+        ? 1 - (brk - 0.05) / 0.2 * 0.3  // 1.0 → 0.7 (subtle breathing)
+        : brk < 0.5
+          ? 0.7 - (brk - 0.25) / 0.25 * 0.25  // 0.7 → 0.45 (noticeable)
+          : brk < 0.75
+            ? 0.45 - (brk - 0.5) / 0.25 * 0.2  // 0.45 → 0.25 (rhythmic)
+            : 0.25 - (brk - 0.75) / 0.25 * 0.15; // 0.25 → 0.1 (dramatic)
       
       gateMax = 1;
       gateDepth = gateMax - gateMin;
       
-      // Rate: how fast the gating happens
-      gateRate = brk < 0.4
-        ? 0.3 + (brk - 0.15) * 2  // 0.3-0.8 Hz (slow pulse)
-        : brk < 0.7
-          ? 0.8 + (brk - 0.4) * 5  // 0.8-2.3 Hz (rhythmic)
-          : 2.3 + (brk - 0.7) * 8; // 2.3-4.7 Hz (fast stutter)
+      // Rate: starts slower, ramps up
+      gateRate = brk < 0.25
+        ? 0.2 + (brk - 0.05) * 2  // 0.2-0.6 Hz (very slow pulse)
+        : brk < 0.5
+          ? 0.6 + (brk - 0.25) * 4  // 0.6-1.6 Hz (breathing)
+          : brk < 0.75
+            ? 1.6 + (brk - 0.5) * 6  // 1.6-3.1 Hz (rhythmic)
+            : 3.1 + (brk - 0.75) * 8; // 3.1-5.1 Hz (stutter)
     }
     
-    // Set the LFO to modulate gain directly
-    // The shaper converts -1..1 to gateMin..gateMax range
+    // Set the LFO rate
     this.breakLfo.frequency.setTargetAtTime(gateRate, now, 0.05);
     
-    // Scale the LFO output to achieve the desired depth
-    // LFO outputs -1 to 1, shaper maps to ~0.3-1.0
-    // We scale this further with breakLfoGain
-    const lfoScale = gateDepth * 0.7; // Scale factor for volume modulation
+    // Scale the LFO output for volume modulation
+    const lfoScale = gateDepth * 0.7;
     this.breakLfoGain.gain.setTargetAtTime(lfoScale, now, 0.05);
     
     // Set base gate gain to center of range
