@@ -8,6 +8,23 @@ const Index = () => {
       {/* Scanline effect */}
       <div className="scanline" />
 
+      {/* HUD Elements */}
+      {/* Left side vertical text */}
+      <div className="fixed left-4 top-1/2 -translate-y-1/2 z-20 hidden md:block">
+        <p className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground/40 uppercase writing-vertical">
+          ▮ sublingual radio · soma · maps for the places we haven't been yet
+        </p>
+      </div>
+
+      {/* Bottom left console text */}
+      <div className="fixed left-4 bottom-4 z-20 hidden md:block">
+        <div className="font-mono text-[10px] text-muted-foreground/40 space-y-0.5">
+          <p>&gt; listening for future signals_</p>
+          <p>&gt; music_as_map :: active</p>
+          <p>&gt; press H to hide HUD</p>
+        </div>
+      </div>
+
       {/* Background gradient */}
       <div className="absolute inset-0 bg-gradient-to-br from-deep-blue via-background to-background" />
 

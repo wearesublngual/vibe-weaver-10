@@ -166,4 +166,10 @@ All colors MUST be HSL.
     color: hsl(var(--phosphor));
     font-weight: 900;
   }
+
+  /* Vertical writing mode for HUD */
+  .writing-vertical {
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+  }
 }
