@@ -193,83 +193,96 @@ export class AudioEffectsChain {
     this._debugValues.echo = { wet: delayWet, feedback, delayTime };
     
     // === DRIFT MAPPING ===
-    // Perceptible filter movement but NEVER cuts out completely
+    // AGGRESSIVE filter movement with 2kHz floor
     const drift = this.currentParams.drift;
     
-    // Filter frequency: minimum floor of 3kHz to preserve clarity
-    const minFreq = 3000; // Never go below 3kHz
+    // Filter frequency: floor of 2kHz, more aggressive cuts
+    const minFreq = 2000;
     const baseFreq = drift < 0.3
-      ? 20000 - drift / 0.3 * 6000  // 20kHz → 14kHz (subtle warmth)
+      ? 18000 - drift / 0.3 * 8000  // 18kHz → 10kHz 
       : drift < 0.7
-        ? 14000 - (drift - 0.3) / 0.4 * 7000  // 14kHz → 7kHz (noticeable color)
-        : Math.max(minFreq, 7000 - (drift - 0.7) / 0.3 * 4000);  // 7kHz → 3kHz (dramatic but safe)
+        ? 10000 - (drift - 0.3) / 0.4 * 6000  // 10kHz → 4kHz
+        : Math.max(minFreq, 4000 - (drift - 0.7) / 0.3 * 2000);  // 4kHz → 2kHz
     
-    // LFO depth: scaled to never push below minFreq
-    const maxDepth = (baseFreq - minFreq) * 0.8; // Only modulate 80% of available range
+    // LFO depth: aggressive but safe
     const lfoDepth = drift < 0.3 
-      ? drift / 0.3 * 1500  // 0-1500Hz modulation
+      ? drift / 0.3 * 3000  // 0-3000Hz modulation
       : drift < 0.7
-        ? 1500 + (drift - 0.3) / 0.4 * 2000  // 1500-3500Hz
-        : Math.min(maxDepth, 3500 + (drift - 0.7) / 0.3 * 2000); // capped to safe range
+        ? 3000 + (drift - 0.3) / 0.4 * 3000  // 3000-6000Hz
+        : 6000 + (drift - 0.7) / 0.3 * 2000; // 6000-8000Hz (capped to stay above floor)
     
-    // Q: moderate resonance (too high causes perceived cutout)
-    const filterQ = 1 + drift * 5; // 1-6 Q (reduced from 1-9)
+    // Q: noticeable resonance
+    const filterQ = 2 + drift * 8; // 2-10 Q for obvious sweep
     
-    // LFO speed: expressive but not jarring
-    const lfoSpeed = 0.2 + drift * 1.3; // 0.2-1.5 Hz
+    // LFO speed: fast enough to notice
+    const lfoSpeed = 0.3 + drift * 2.0; // 0.3-2.3 Hz
     
-    this.filterNode.frequency.setTargetAtTime(baseFreq, now, 0.1);
-    this.filterNode.Q.setTargetAtTime(filterQ, now, 0.1);
-    this.filterLfoGain.gain.setTargetAtTime(lfoDepth, now, 0.1);
-    this.filterLfo.frequency.setTargetAtTime(lfoSpeed, now, 0.1);
+    this.filterNode.frequency.setTargetAtTime(baseFreq, now, 0.05);
+    this.filterNode.Q.setTargetAtTime(filterQ, now, 0.05);
+    this.filterLfoGain.gain.setTargetAtTime(lfoDepth, now, 0.05);
+    this.filterLfo.frequency.setTargetAtTime(lfoSpeed, now, 0.05);
     
     // Store computed drift values for debug
     this._debugValues.drift = { baseFreq, lfoDepth, filterQ, lfoSpeed };
     
     // === BREAK MAPPING ===
-    // FIXED: More aggressive gating
+    // Direct gain modulation for obvious volume gating
     const brk = this.currentParams.break_;
     
     let gateDepth = 0;
     let gateRate = 0;
+    let gateMin = 1;
+    let gateMax = 1;
     
-    if (brk < 0.2) {
+    if (brk < 0.15) {
       // Off - no gating
       gateDepth = 0;
       gateRate = 0.5;
+      gateMin = 1;
+      gateMax = 1;
     } else {
-      // Active gating - MUCH more aggressive depth
-      gateDepth = brk < 0.5
-        ? (brk - 0.2) / 0.3 * 0.5  // 0-50% depth (breathing)
-        : brk < 0.8
-          ? 0.5 + (brk - 0.5) / 0.3 * 0.3  // 50-80% depth (rhythmic)
-          : 0.8 + (brk - 0.8) / 0.2 * 0.2; // 80-100% depth (stutters)
+      // Calculate gate range (min to max volume)
+      // Higher break = deeper cuts (lower minimum)
+      gateMin = brk < 0.4
+        ? 1 - (brk - 0.15) / 0.25 * 0.4  // 1.0 → 0.6 (subtle breathing)
+        : brk < 0.7
+          ? 0.6 - (brk - 0.4) / 0.3 * 0.3  // 0.6 → 0.3 (rhythmic dips)
+          : 0.3 - (brk - 0.7) / 0.3 * 0.2; // 0.3 → 0.1 (dramatic gating)
       
-      // Rate increases with break level
-      gateRate = brk < 0.5
-        ? 0.5 + (brk - 0.2) * 3  // 0.5-1.4 Hz (slow breathing)
-        : brk < 0.8
-          ? 1.4 + (brk - 0.5) * 8  // 1.4-3.8 Hz
-          : 3.8 + (brk - 0.8) * 12; // 3.8-6.2 Hz
+      gateMax = 1;
+      gateDepth = gateMax - gateMin;
+      
+      // Rate: how fast the gating happens
+      gateRate = brk < 0.4
+        ? 0.3 + (brk - 0.15) * 2  // 0.3-0.8 Hz (slow pulse)
+        : brk < 0.7
+          ? 0.8 + (brk - 0.4) * 5  // 0.8-2.3 Hz (rhythmic)
+          : 2.3 + (brk - 0.7) * 8; // 2.3-4.7 Hz (fast stutter)
     }
     
-    this.breakLfoGain.gain.setTargetAtTime(gateDepth, now, 0.05);
-    this.breakLfo.frequency.setTargetAtTime(gateRate, now, 0.1);
+    // Set the LFO to modulate gain directly
+    // The shaper converts -1..1 to gateMin..gateMax range
+    this.breakLfo.frequency.setTargetAtTime(gateRate, now, 0.05);
     
-    // Also directly modulate gate gain for more obvious effect
-    // The shaper approach wasn't working well, so add direct modulation
-    const gateBase = 1 - gateDepth * 0.5; // Keep base volume higher
-    this.gateGain.gain.setTargetAtTime(gateBase, now, 0.05);
+    // Scale the LFO output to achieve the desired depth
+    // LFO outputs -1 to 1, shaper maps to ~0.3-1.0
+    // We scale this further with breakLfoGain
+    const lfoScale = gateDepth * 0.7; // Scale factor for volume modulation
+    this.breakLfoGain.gain.setTargetAtTime(lfoScale, now, 0.05);
+    
+    // Set base gate gain to center of range
+    const gateCenter = gateMin + gateDepth * 0.5;
+    this.gateGain.gain.setTargetAtTime(gateCenter, now, 0.05);
     
     // Store computed break values for debug
-    this._debugValues.break_ = { gateDepth, gateRate, gateBase };
+    this._debugValues.break_ = { gateDepth, gateRate, gateMin, gateMax, gateCenter };
   }
   
   // Debug values storage
   private _debugValues = {
     echo: { wet: 0, feedback: 0, delayTime: 0 },
     drift: { baseFreq: 20000, lfoDepth: 0, filterQ: 1, lfoSpeed: 0.1 },
-    break_: { gateDepth: 0, gateRate: 0, gateBase: 1 }
+    break_: { gateDepth: 0, gateRate: 0, gateMin: 1, gateMax: 1, gateCenter: 1 }
   };
   
   getDebugValues() {

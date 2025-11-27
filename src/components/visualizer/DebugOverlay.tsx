@@ -287,18 +287,22 @@ const DebugOverlay = ({ params, analyser, audioParams = DEFAULT_AUDIO_PARAMS, ef
                   <span className="text-signal">{(audioParams.break_ * 100).toFixed(0)}%</span>
                 </div>
                 {effectDebug?.break_ && (
-                  <div className="grid grid-cols-3 gap-1 text-[9px]">
+                  <div className="grid grid-cols-4 gap-1 text-[9px]">
                     <div>
-                      <div className="text-muted-foreground">depth</div>
-                      <div className="text-foreground">{(effectDebug.break_.gateDepth * 100).toFixed(1)}%</div>
+                      <div className="text-muted-foreground">min</div>
+                      <div className="text-foreground">{(effectDebug.break_.gateMin * 100).toFixed(0)}%</div>
+                    </div>
+                    <div>
+                      <div className="text-muted-foreground">max</div>
+                      <div className="text-foreground">{(effectDebug.break_.gateMax * 100).toFixed(0)}%</div>
                     </div>
                     <div>
                       <div className="text-muted-foreground">rate</div>
                       <div className="text-foreground">{effectDebug.break_.gateRate.toFixed(2)}Hz</div>
                     </div>
                     <div>
-                      <div className="text-muted-foreground">base</div>
-                      <div className="text-foreground">{(effectDebug.break_.gateBase * 100).toFixed(1)}%</div>
+                      <div className="text-muted-foreground">center</div>
+                      <div className="text-foreground">{(effectDebug.break_.gateCenter * 100).toFixed(0)}%</div>
                     </div>
                   </div>
                 )}
