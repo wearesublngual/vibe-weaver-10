@@ -193,29 +193,29 @@ export class AudioEffectsChain {
     this._debugValues.echo = { wet: delayWet, feedback, delayTime };
     
     // === DRIFT MAPPING ===
-    // Noticeable filter movement, less aggressive resonance
+    // Higher floor to prevent audio dropout at 100%
     const drift = this.currentParams.drift;
     
-    // Filter frequency: floor of 2.5kHz
-    const minFreq = 2500;
+    // Filter frequency: floor of 4kHz to prevent dropout
+    const minFreq = 4000;
     const baseFreq = drift < 0.3
-      ? 18000 - drift / 0.3 * 6000  // 18kHz → 12kHz 
+      ? 18000 - drift / 0.3 * 4000  // 18kHz → 14kHz 
       : drift < 0.7
-        ? 12000 - (drift - 0.3) / 0.4 * 6000  // 12kHz → 6kHz
-        : Math.max(minFreq, 6000 - (drift - 0.7) / 0.3 * 3500);  // 6kHz → 2.5kHz
+        ? 14000 - (drift - 0.3) / 0.4 * 6000  // 14kHz → 8kHz
+        : Math.max(minFreq, 8000 - (drift - 0.7) / 0.3 * 4000);  // 8kHz → 4kHz
     
-    // LFO depth: moderate
+    // LFO depth: moderate, capped to stay above floor
     const lfoDepth = drift < 0.3 
-      ? drift / 0.3 * 2000  // 0-2000Hz modulation
+      ? drift / 0.3 * 1500  // 0-1500Hz modulation
       : drift < 0.7
-        ? 2000 + (drift - 0.3) / 0.4 * 2500  // 2000-4500Hz
-        : 4500 + (drift - 0.7) / 0.3 * 1500; // 4500-6000Hz
+        ? 1500 + (drift - 0.3) / 0.4 * 1500  // 1500-3000Hz
+        : 3000 + (drift - 0.7) / 0.3 * 1000; // 3000-4000Hz (capped)
     
-    // Q: reduced resonance (less wah-wah)
-    const filterQ = 1.5 + drift * 4; // 1.5-5.5 Q (was 2-10)
+    // Q: moderate resonance
+    const filterQ = 1.5 + drift * 3.5; // 1.5-5 Q
     
     // LFO speed: moderate
-    const lfoSpeed = 0.25 + drift * 1.25; // 0.25-1.5 Hz (was 0.3-2.3)
+    const lfoSpeed = 0.25 + drift * 1.25; // 0.25-1.5 Hz
     
     this.filterNode.frequency.setTargetAtTime(baseFreq, now, 0.05);
     this.filterNode.Q.setTargetAtTime(filterQ, now, 0.05);
@@ -234,33 +234,33 @@ export class AudioEffectsChain {
     let gateMin = 1;
     let gateMax = 1;
     
-    if (brk < 0.05) {
-      // Off - no gating (only first 5%)
+    if (brk < 0.03) {
+      // Off - no gating (only first 3%)
       gateDepth = 0;
       gateRate = 0.5;
       gateMin = 1;
       gateMax = 1;
     } else {
-      // Calculate gate range - starts much earlier now
-      gateMin = brk < 0.25
-        ? 1 - (brk - 0.05) / 0.2 * 0.3  // 1.0 → 0.7 (subtle breathing)
-        : brk < 0.5
-          ? 0.7 - (brk - 0.25) / 0.25 * 0.25  // 0.7 → 0.45 (noticeable)
-          : brk < 0.75
-            ? 0.45 - (brk - 0.5) / 0.25 * 0.2  // 0.45 → 0.25 (rhythmic)
-            : 0.25 - (brk - 0.75) / 0.25 * 0.15; // 0.25 → 0.1 (dramatic)
+      // More aggressive gating - deeper cuts, faster onset
+      gateMin = brk < 0.2
+        ? 1 - (brk - 0.03) / 0.17 * 0.4  // 1.0 → 0.6 (noticeable from start)
+        : brk < 0.4
+          ? 0.6 - (brk - 0.2) / 0.2 * 0.25  // 0.6 → 0.35 (rhythmic)
+          : brk < 0.7
+            ? 0.35 - (brk - 0.4) / 0.3 * 0.15  // 0.35 → 0.2 (deep)
+            : 0.2 - (brk - 0.7) / 0.3 * 0.12; // 0.2 → 0.08 (dramatic)
       
       gateMax = 1;
       gateDepth = gateMax - gateMin;
       
-      // Rate: starts slower, ramps up
-      gateRate = brk < 0.25
-        ? 0.2 + (brk - 0.05) * 2  // 0.2-0.6 Hz (very slow pulse)
-        : brk < 0.5
-          ? 0.6 + (brk - 0.25) * 4  // 0.6-1.6 Hz (breathing)
-          : brk < 0.75
-            ? 1.6 + (brk - 0.5) * 6  // 1.6-3.1 Hz (rhythmic)
-            : 3.1 + (brk - 0.75) * 8; // 3.1-5.1 Hz (stutter)
+      // Rate: faster overall
+      gateRate = brk < 0.2
+        ? 0.5 + (brk - 0.03) * 4  // 0.5-1.2 Hz (pulse)
+        : brk < 0.4
+          ? 1.2 + (brk - 0.2) * 5  // 1.2-2.2 Hz (rhythmic)
+          : brk < 0.7
+            ? 2.2 + (brk - 0.4) * 4  // 2.2-3.4 Hz (choppy)
+            : 3.4 + (brk - 0.7) * 6; // 3.4-5.2 Hz (stutter)
     }
     
     // Set the LFO rate
