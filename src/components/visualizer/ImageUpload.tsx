@@ -152,7 +152,7 @@ const ImageUpload = ({ onImageLoad, currentImage }: ImageUploadProps) => {
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <label className="font-mono text-xs text-muted-foreground">
-          SOURCE IMAGE
+          1) SELECT OR UPLOAD IMAGE
         </label>
         {preview && (
           <Button
@@ -245,7 +245,7 @@ const ImageUpload = ({ onImageLoad, currentImage }: ImageUploadProps) => {
       </div>
 
       <p className="font-mono text-[10px] text-muted-foreground/60">
-        Image will be transformed by the perceptual effects
+        your reality substrate — choose wisely
       </p>
     </div>
   );
