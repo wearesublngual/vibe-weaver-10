@@ -3,10 +3,10 @@ import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Card } from "@/components/ui/card";
-import { ArrowLeft, Play, Pause, RotateCcw, Settings2 } from "lucide-react";
+import { ArrowLeft, RotateCcw, Settings2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import HydraCanvas from "@/components/visualizer/HydraCanvas";
-import AudioInput from "@/components/visualizer/AudioInput";
+import TrackPlayer from "@/components/visualizer/TrackPlayer";
 import { generateSeed } from "@/lib/seed-generator";
 
 const Visualizer = () => {
@@ -95,24 +95,18 @@ const Visualizer = () => {
         </motion.div>
 
         {/* Main Content Area */}
-        <div className="flex flex-1 items-end justify-between p-6">
-          {/* Seed Display */}
+        <div className="flex flex-1 items-end justify-between gap-6 p-6">
+          {/* Left: Track Player */}
           <motion.div
             initial={{ x: -100, opacity: 0 }}
             animate={{ x: 0, opacity: 1 }}
             transition={{ duration: 0.5, delay: 0.2 }}
+            className="w-96"
           >
-            <Card className="border-phosphor/30 bg-card/80 p-4 backdrop-blur-md">
-              <div className="mb-2 font-mono text-xs text-muted-foreground">
-                SESSION SEED
-              </div>
-              <div className="font-mono text-lg font-semibold text-phosphor">
-                {seed}
-              </div>
-            </Card>
+            <TrackPlayer onAudioInit={handleAudioInit} />
           </motion.div>
 
-          {/* Controls Panel */}
+          {/* Right: Controls Panel */}
           {showControls && (
             <motion.div
               initial={{ x: 100, opacity: 0 }}
@@ -217,15 +211,18 @@ const Visualizer = () => {
                     </div>
                   </div>
 
-                  <div className="flex gap-2 border-t border-phosphor/20 pt-4">
-                    {!isPlaying && (
-                      <AudioInput onAudioInit={handleAudioInit} />
-                    )}
+                  <div className="border-t border-phosphor/20 pt-4">
+                    <div className="mb-2 font-mono text-xs text-muted-foreground">
+                      SESSION SEED
+                    </div>
+                    <div className="mb-3 rounded border border-phosphor/20 bg-void/50 p-2 font-mono text-sm text-phosphor">
+                      {seed}
+                    </div>
                     <Button
                       onClick={handleReset}
                       variant="outline"
                       size="sm"
-                      className="flex-1 border-phosphor/30 font-mono hover:border-phosphor hover:bg-card"
+                      className="w-full border-phosphor/30 font-mono hover:border-phosphor hover:bg-card"
                     >
                       <RotateCcw className="mr-2 h-4 w-4" />
                       New Seed
