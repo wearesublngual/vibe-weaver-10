@@ -181,10 +181,12 @@ const Visualizer = () => {
           duration: 0.5,
           delay: 0.2
         }} className="flex w-96 flex-col gap-4">
-            {/* Image Upload */}
-            <Card className="border-phosphor/30 bg-card/80 p-4 backdrop-blur-md">
-              <ImageUpload onImageLoad={handleImageLoad} currentImage={sourceImage} />
-            </Card>
+            {/* Image Upload - Hidden when controls are hidden */}
+            {showControls && (
+              <Card className="border-phosphor/30 bg-card/80 p-4 backdrop-blur-md">
+                <ImageUpload onImageLoad={handleImageLoad} currentImage={sourceImage} />
+              </Card>
+            )}
             
             {/* Track Player */}
             <TrackPlayer onAudioInit={handleAudioInit} audioParams={audioParams} />
