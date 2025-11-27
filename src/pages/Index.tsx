@@ -154,6 +154,9 @@ const Index = () => {
                 <div className="absolute inset-0 bg-electric opacity-0 transition-opacity group-hover:opacity-100" />
               </Button>
             </Link>
+            <p className="mt-4 font-mono text-xs text-muted-foreground/70">
+              ⚠️ SEIZURE WARNING: Contains intense visual patterns, flickers, and rapid motion. View with caution.
+            </p>
           </motion.div>
         </motion.div>
 
