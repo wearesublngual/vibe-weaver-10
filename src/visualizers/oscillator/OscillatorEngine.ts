@@ -1,6 +1,6 @@
 /**
- * Coupled Oscillator Visualizer Engine
- * Kuramoto model with Perlin noise modulation
+ * Perceptual Visualizer Engine
+ * Audio-reactive with meaningful visual constraints
  */
 
 import { VisualizerEngine, AudioData, VisualizerParams, mapToPerceptualZone } from '../types';
@@ -13,23 +13,22 @@ export class OscillatorEngine implements VisualizerEngine {
   private gl: WebGL2RenderingContext | null = null;
   private initialized = false;
   
-  // Simulation resolution (lower for performance)
-  private simWidth = 320;
-  private simHeight = 180;
+  // Simulation resolution
+  private simWidth = 512;
+  private simHeight = 288;
   
   // WebGL resources
   private updateProgram: WebGLProgram | null = null;
   private renderProgram: WebGLProgram | null = null;
   private quad: { vao: WebGLVertexArrayObject; draw: () => void } | null = null;
   
-  // Ping-pong framebuffers for state
+  // Ping-pong framebuffers
   private stateBuffers: [Framebuffer | null, Framebuffer | null] = [null, null];
   private currentBuffer = 0;
   
   // Noise texture
   private noiseTexture: WebGLTexture | null = null;
-  private noiseData: Float32Array | null = null;
-  private noiseUpdateTime = 0;
+  private noiseTime = 0;
   
   // Uniform locations
   private updateUniforms: Record<string, WebGLUniformLocation | null> = {};
@@ -37,10 +36,18 @@ export class OscillatorEngine implements VisualizerEngine {
   
   // Time tracking
   private time = 0;
-  private lastFrameTime = 0;
+  
+  // Store last values for render pass
+  private lastAudio: AudioData = { 
+    bass: 0.1, lowMid: 0.1, mid: 0.1, high: 0.05, 
+    energy: 0.1, beatDetected: false, beatIntensity: 0 
+  };
+  private lastParams: VisualizerParams = { 
+    depth: 0.5, curvature: 0.3, turbulence: 0.4, 
+    branching: 0.5, persistence: 0.3, focus: 0.5 
+  };
   
   constructor(private seed: string = 'default') {
-    // Initialize Perlin with seed
     const seedNum = this.stringToSeed(seed);
     initPerlin(seedNum);
   }
@@ -57,7 +64,6 @@ export class OscillatorEngine implements VisualizerEngine {
   async init(canvas: HTMLCanvasElement): Promise<void> {
     this.canvas = canvas;
     
-    // Get WebGL2 context
     const gl = canvas.getContext('webgl2', {
       alpha: false,
       antialias: false,
@@ -72,72 +78,126 @@ export class OscillatorEngine implements VisualizerEngine {
     
     this.gl = gl;
     
-    // Check for required extensions
+    // Check for float texture support
     const floatExt = gl.getExtension('EXT_color_buffer_float');
+    const floatLinear = gl.getExtension('OES_texture_float_linear');
+    
     if (!floatExt) {
-      console.warn('EXT_color_buffer_float not supported, falling back');
+      console.warn('EXT_color_buffer_float not available, using fallback');
     }
     
-    // Create shader programs
+    // Create programs
     this.updateProgram = createProgramFromSources(gl, vertexShader, updateShader);
     this.renderProgram = createProgramFromSources(gl, vertexShader, renderShader);
     
     if (!this.updateProgram || !this.renderProgram) {
-      throw new Error('Failed to create shader programs');
+      console.error('Failed to create shader programs');
+      throw new Error('Shader compilation failed');
     }
     
     // Get uniform locations
-    this.updateUniforms = getUniformLocations(gl, this.updateProgram, [
+    const updateUniformNames = [
       'u_state', 'u_noise', 'u_resolution', 'u_time', 'u_deltaTime',
       'u_bass', 'u_lowMid', 'u_mid', 'u_high', 'u_energy', 'u_beatIntensity',
       'u_depth', 'u_curvature', 'u_turbulence', 'u_branching', 'u_persistence', 'u_focus'
-    ]);
+    ];
     
-    this.renderUniforms = getUniformLocations(gl, this.renderProgram, [
+    const renderUniformNames = [
       'u_state', 'u_noise', 'u_time',
       'u_bass', 'u_energy', 'u_beatIntensity',
-      'u_curvature', 'u_persistence', 'u_focus', 'u_branching'
-    ]);
+      'u_depth', 'u_curvature', 'u_turbulence', 'u_branching', 'u_persistence', 'u_focus'
+    ];
+    
+    this.updateUniforms = getUniformLocations(gl, this.updateProgram, updateUniformNames);
+    this.renderUniforms = getUniformLocations(gl, this.renderProgram, renderUniformNames);
     
     // Create fullscreen quad
     this.quad = createFullscreenQuad(gl);
     if (!this.quad) {
-      throw new Error('Failed to create fullscreen quad');
+      throw new Error('Failed to create quad');
     }
     
-    // Create ping-pong framebuffers
-    this.stateBuffers[0] = createFramebuffer(gl, this.simWidth, this.simHeight);
-    this.stateBuffers[1] = createFramebuffer(gl, this.simWidth, this.simHeight);
+    // Create framebuffers - try float, fall back to half float
+    let format: number = gl.RGBA32F;
+    
+    this.stateBuffers[0] = createFramebuffer(gl, this.simWidth, this.simHeight, format);
+    
+    if (!this.stateBuffers[0]) {
+      // Fallback to RGBA16F
+      format = gl.RGBA16F;
+      this.stateBuffers[0] = createFramebuffer(gl, this.simWidth, this.simHeight, format);
+    }
+    
+    if (!this.stateBuffers[0]) {
+      // Last resort - RGBA8
+      console.warn('Using RGBA8 fallback');
+      this.stateBuffers[0] = this.createRGBA8Framebuffer(gl, this.simWidth, this.simHeight);
+    }
+    
+    this.stateBuffers[1] = createFramebuffer(gl, this.simWidth, this.simHeight, format);
+    if (!this.stateBuffers[1]) {
+      this.stateBuffers[1] = this.createRGBA8Framebuffer(gl, this.simWidth, this.simHeight);
+    }
     
     if (!this.stateBuffers[0] || !this.stateBuffers[1]) {
       throw new Error('Failed to create framebuffers');
     }
     
-    // Initialize state with random phases
+    // Initialize state
     this.initializeState();
     
     // Create noise texture
     this.createNoiseTexture();
     
     this.initialized = true;
-    console.log('OscillatorEngine initialized');
+    console.log('Perceptual visualizer engine initialized');
+  }
+  
+  private createRGBA8Framebuffer(gl: WebGL2RenderingContext, width: number, height: number): Framebuffer | null {
+    const texture = gl.createTexture();
+    if (!texture) return null;
+    
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    
+    const framebuffer = gl.createFramebuffer();
+    if (!framebuffer) return null;
+    
+    gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    
+    return { framebuffer, texture };
   }
   
   private initializeState(): void {
     const gl = this.gl!;
     
-    // Create initial random phases
+    // Initialize with some variation
     const data = new Float32Array(this.simWidth * this.simHeight * 4);
-    const TAU = Math.PI * 2;
     
-    for (let i = 0; i < this.simWidth * this.simHeight; i++) {
-      data[i * 4] = Math.random() * TAU;     // phase
-      data[i * 4 + 1] = 0;                    // coupling
-      data[i * 4 + 2] = 0;                    // energy
-      data[i * 4 + 3] = 1;                    // unused
+    for (let y = 0; y < this.simHeight; y++) {
+      for (let x = 0; x < this.simWidth; x++) {
+        const i = (y * this.simWidth + x) * 4;
+        const u = x / this.simWidth;
+        const v = y / this.simHeight;
+        
+        // Initial phase variation
+        data[i] = Math.random() * Math.PI * 2;
+        // Initial energy - slight radial gradient
+        const dist = Math.sqrt((u - 0.5) ** 2 + (v - 0.5) ** 2);
+        data[i + 1] = 0.3 + (1 - dist) * 0.2;
+        // Wave value
+        data[i + 2] = 0.5;
+        // Beat
+        data[i + 3] = 0;
+      }
     }
     
-    // Upload to both buffers
     for (const buffer of this.stateBuffers) {
       if (buffer) {
         gl.bindTexture(gl.TEXTURE_2D, buffer.texture);
@@ -152,10 +212,9 @@ export class OscillatorEngine implements VisualizerEngine {
     this.noiseTexture = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, this.noiseTexture);
     
-    // Generate initial noise
-    this.noiseData = generateNoiseTexture(this.simWidth, this.simHeight, 4, 0);
+    const noiseData = generateNoiseTexture(this.simWidth, this.simHeight, 4, 0);
     
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, this.simWidth, this.simHeight, 0, gl.RGBA, gl.FLOAT, this.noiseData);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, this.simWidth, this.simHeight, 0, gl.RGBA, gl.FLOAT, noiseData);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
@@ -165,14 +224,13 @@ export class OscillatorEngine implements VisualizerEngine {
   private updateNoiseTexture(): void {
     const gl = this.gl!;
     
-    // Update noise slowly for organic drift
-    this.noiseUpdateTime += 0.016; // ~60fps
+    this.noiseTime += 0.005; // Slow drift
     
-    // Only regenerate occasionally for performance
-    if (Math.floor(this.noiseUpdateTime * 2) > Math.floor((this.noiseUpdateTime - 0.016) * 2)) {
-      this.noiseData = generateNoiseTexture(this.simWidth, this.simHeight, 4, this.noiseUpdateTime);
+    // Update less frequently
+    if (Math.floor(this.noiseTime * 10) > Math.floor((this.noiseTime - 0.005) * 10)) {
+      const noiseData = generateNoiseTexture(this.simWidth, this.simHeight, 4, this.noiseTime);
       gl.bindTexture(gl.TEXTURE_2D, this.noiseTexture);
-      gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, this.simWidth, this.simHeight, gl.RGBA, gl.FLOAT, this.noiseData);
+      gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, this.simWidth, this.simHeight, gl.RGBA, gl.FLOAT, noiseData);
     }
   }
   
@@ -180,7 +238,6 @@ export class OscillatorEngine implements VisualizerEngine {
     const gl = this.gl;
     if (!gl) return;
     
-    // Clean up WebGL resources
     if (this.updateProgram) gl.deleteProgram(this.updateProgram);
     if (this.renderProgram) gl.deleteProgram(this.renderProgram);
     
@@ -202,11 +259,11 @@ export class OscillatorEngine implements VisualizerEngine {
     const gl = this.gl;
     this.time += deltaTime;
     
-    // Store for render pass
+    // Store for render
     this.lastAudio = audio;
     this.lastParams = params;
     
-    // Update noise texture for organic movement
+    // Update noise slowly
     this.updateNoiseTexture();
     
     // Map params through perceptual zones
@@ -217,17 +274,17 @@ export class OscillatorEngine implements VisualizerEngine {
     const pPersistence = mapToPerceptualZone(params.persistence);
     const pFocus = mapToPerceptualZone(params.focus);
     
-    // Get current and next buffers
+    // Get buffers
     const currentState = this.stateBuffers[this.currentBuffer]!;
     const nextState = this.stateBuffers[1 - this.currentBuffer]!;
     
-    // Render to next state buffer
+    // Render to next buffer
     gl.bindFramebuffer(gl.FRAMEBUFFER, nextState.framebuffer);
     gl.viewport(0, 0, this.simWidth, this.simHeight);
     
     gl.useProgram(this.updateProgram);
     
-    // Bind textures
+    // Textures
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, currentState.texture);
     gl.uniform1i(this.updateUniforms.u_state, 0);
@@ -236,12 +293,12 @@ export class OscillatorEngine implements VisualizerEngine {
     gl.bindTexture(gl.TEXTURE_2D, this.noiseTexture);
     gl.uniform1i(this.updateUniforms.u_noise, 1);
     
-    // Set uniforms
+    // Uniforms
     gl.uniform2f(this.updateUniforms.u_resolution, this.simWidth, this.simHeight);
     gl.uniform1f(this.updateUniforms.u_time, this.time);
-    gl.uniform1f(this.updateUniforms.u_deltaTime, Math.min(deltaTime, 0.05)); // Cap delta time
+    gl.uniform1f(this.updateUniforms.u_deltaTime, Math.min(deltaTime, 0.05));
     
-    // Audio uniforms
+    // Audio
     gl.uniform1f(this.updateUniforms.u_bass, audio.bass);
     gl.uniform1f(this.updateUniforms.u_lowMid, audio.lowMid);
     gl.uniform1f(this.updateUniforms.u_mid, audio.mid);
@@ -249,7 +306,7 @@ export class OscillatorEngine implements VisualizerEngine {
     gl.uniform1f(this.updateUniforms.u_energy, audio.energy);
     gl.uniform1f(this.updateUniforms.u_beatIntensity, audio.beatIntensity);
     
-    // Parameter uniforms
+    // Params
     gl.uniform1f(this.updateUniforms.u_depth, pDepth);
     gl.uniform1f(this.updateUniforms.u_curvature, pCurvature);
     gl.uniform1f(this.updateUniforms.u_turbulence, pTurbulence);
@@ -257,22 +314,25 @@ export class OscillatorEngine implements VisualizerEngine {
     gl.uniform1f(this.updateUniforms.u_persistence, pPersistence);
     gl.uniform1f(this.updateUniforms.u_focus, pFocus);
     
-    // Draw
     this.quad!.draw();
     
-    // Swap buffers
+    // Swap
     this.currentBuffer = 1 - this.currentBuffer;
   }
   
-  // Store last audio/params for render pass
-  private lastAudio: AudioData = { bass: 0, lowMid: 0, mid: 0, high: 0, energy: 0, beatDetected: false, beatIntensity: 0 };
-  private lastParams: VisualizerParams = { depth: 0.5, curvature: 0.3, turbulence: 0.4, branching: 0.5, persistence: 0.3, focus: 0.5 };
-
   render(): void {
     if (!this.initialized || !this.gl || !this.canvas) return;
     
     const gl = this.gl;
     const currentState = this.stateBuffers[this.currentBuffer]!;
+    
+    // Map params
+    const pDepth = mapToPerceptualZone(this.lastParams.depth);
+    const pCurvature = mapToPerceptualZone(this.lastParams.curvature);
+    const pTurbulence = mapToPerceptualZone(this.lastParams.turbulence);
+    const pBranching = mapToPerceptualZone(this.lastParams.branching);
+    const pPersistence = mapToPerceptualZone(this.lastParams.persistence);
+    const pFocus = mapToPerceptualZone(this.lastParams.focus);
     
     // Render to screen
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
@@ -280,27 +340,27 @@ export class OscillatorEngine implements VisualizerEngine {
     
     gl.useProgram(this.renderProgram);
     
-    // Bind state texture
+    // Textures
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, currentState.texture);
     gl.uniform1i(this.renderUniforms.u_state, 0);
     
-    // Bind noise texture
     gl.activeTexture(gl.TEXTURE1);
     gl.bindTexture(gl.TEXTURE_2D, this.noiseTexture);
     gl.uniform1i(this.renderUniforms.u_noise, 1);
     
-    // Set all uniforms
+    // Uniforms
     gl.uniform1f(this.renderUniforms.u_time, this.time);
     gl.uniform1f(this.renderUniforms.u_bass, this.lastAudio.bass);
     gl.uniform1f(this.renderUniforms.u_energy, this.lastAudio.energy);
     gl.uniform1f(this.renderUniforms.u_beatIntensity, this.lastAudio.beatIntensity);
-    gl.uniform1f(this.renderUniforms.u_curvature, mapToPerceptualZone(this.lastParams.curvature));
-    gl.uniform1f(this.renderUniforms.u_persistence, mapToPerceptualZone(this.lastParams.persistence));
-    gl.uniform1f(this.renderUniforms.u_focus, mapToPerceptualZone(this.lastParams.focus));
-    gl.uniform1f(this.renderUniforms.u_branching, mapToPerceptualZone(this.lastParams.branching));
+    gl.uniform1f(this.renderUniforms.u_depth, pDepth);
+    gl.uniform1f(this.renderUniforms.u_curvature, pCurvature);
+    gl.uniform1f(this.renderUniforms.u_turbulence, pTurbulence);
+    gl.uniform1f(this.renderUniforms.u_branching, pBranching);
+    gl.uniform1f(this.renderUniforms.u_persistence, pPersistence);
+    gl.uniform1f(this.renderUniforms.u_focus, pFocus);
     
-    // Draw
     this.quad!.draw();
   }
   
@@ -309,10 +369,9 @@ export class OscillatorEngine implements VisualizerEngine {
   }
   
   getName(): string {
-    return 'Coupled Oscillators';
+    return 'Perceptual Engine';
   }
   
-  // Allow updating seed
   setSeed(seed: string): void {
     this.seed = seed;
     const seedNum = this.stringToSeed(seed);
@@ -320,7 +379,6 @@ export class OscillatorEngine implements VisualizerEngine {
     
     if (this.initialized) {
       this.initializeState();
-      this.createNoiseTexture();
     }
   }
 }
