@@ -36,6 +36,24 @@ const Index = () => {
       <div className="absolute bottom-1/4 -right-32 w-96 h-96 bg-electric/20 rounded-full blur-[120px]" />
 
       <div className="relative z-10 flex min-h-screen flex-col items-center justify-center px-6 py-20">
+        {/* Album Release Header */}
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6 }}
+          className="fixed top-0 left-0 right-0 z-30 border-b border-phosphor/20 bg-void/90 backdrop-blur-md py-3 px-4"
+        >
+          <div className="flex items-center justify-center gap-2 text-center">
+            <span className="font-mono text-xs tracking-wider text-phosphor font-semibold">SOMA</span>
+            <span className="text-muted-foreground/40">—</span>
+            <span className="font-mono text-xs text-foreground/80">Maps for Places We Haven't Been Yet</span>
+            <span className="text-muted-foreground/40">—</span>
+            <span className="font-mono text-xs text-signal uppercase tracking-wider">Out Now</span>
+            <span className="text-muted-foreground/40 hidden sm:inline">·</span>
+            <span className="font-mono text-[10px] text-muted-foreground/60 hidden sm:inline">Brought to you by Sublingual Records</span>
+          </div>
+        </motion.div>
+
         {/* SOMA Title - Layered Effect */}
         <motion.div
           initial={{
