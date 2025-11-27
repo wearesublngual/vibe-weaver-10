@@ -166,6 +166,14 @@ out vec4 fragColor;
 #define PI 3.14159265359
 #define TAU 6.28318530718
 
+// Non-linear easing functions for perceptual control
+float easeInQuad(float t) { return t * t; }
+float easeOutQuad(float t) { return t * (2.0 - t); }
+float easeInOutCubic(float t) {
+  return t < 0.5 ? 4.0 * t * t * t : 1.0 - pow(-2.0 * t + 2.0, 3.0) / 2.0;
+}
+float smootherStep(float t) { return t * t * t * (t * (t * 6.0 - 15.0) + 10.0); }
+
 vec2 logPolar(vec2 uv, float intensity) {
   vec2 centered = uv - 0.5;
   float r = length(centered) + 0.001;
@@ -239,15 +247,23 @@ void main() {
   float beat = state.w;
   
   // Apply coordinate transforms based on dose and effects
+  // Use non-linear easing for smoother, more expressive control
   
-  // 1. RECURSION - hyperbolic depth
-  if (u_recursion * u_dose > 0.01) {
-    coord = logPolar(coord, u_recursion * u_dose * 0.8);
+  float easedSymmetry = smootherStep(u_symmetry);
+  float easedRecursion = easeInOutCubic(u_recursion);
+  float easedFlow = easeOutQuad(u_flow);
+  float easedSaturation = easeInQuad(u_saturation);
+  
+  // 1. RECURSION - hyperbolic depth (expanded range with easing)
+  float recursionIntensity = easedRecursion * u_dose * 1.5;
+  if (recursionIntensity > 0.01) {
+    coord = logPolar(coord, recursionIntensity);
   }
   
-  // 2. SYMMETRY - kaleidoscope
-  float segments = 3.0 + u_symmetry * u_dose * 9.0;
-  if (u_symmetry * u_dose > 0.1) {
+  // 2. SYMMETRY - kaleidoscope (smoother segment transitions)
+  float symmetryStrength = easedSymmetry * u_dose;
+  float segments = 3.0 + symmetryStrength * 12.0;
+  if (symmetryStrength > 0.05) {
     coord = kaleidoscope(coord, segments);
   }
   
@@ -261,8 +277,9 @@ void main() {
     coord = centered * scale + 0.5;
   }
   
-  // 4. FLOW - warping distortion
-  if (u_flow * u_dose > 0.01) {
+  // 4. FLOW - warping distortion (expanded range)
+  float flowIntensity = easedFlow * u_dose;
+  if (flowIntensity > 0.01) {
     vec4 n = texture(u_noise, coord * 0.5 + u_time * 0.02);
     vec2 flow = vec2(
       sin((n.x - 0.5) * TAU + u_time * 0.3),
@@ -270,7 +287,7 @@ void main() {
     );
     // Audio-reactive flow intensity
     float flowMod = 1.0 + u_lowMid * 0.5;
-    coord += flow * u_flow * u_dose * 0.08 * flowMod;
+    coord += flow * flowIntensity * 0.15 * flowMod;
   }
   
   // Sample the uploaded image with transformed coordinates
@@ -279,20 +296,25 @@ void main() {
   sampleCoord.y = 1.0 - sampleCoord.y;
   vec3 color = texture(u_image, sampleCoord).rgb;
   
-  // 5. SATURATION - color transformation
-  if (u_saturation * u_dose > 0.01) {
+  // 5. SATURATION - color transformation (fixed highlight blowout)
+  float satIntensity = easedSaturation * u_dose;
+  if (satIntensity > 0.01) {
     vec3 hsv = rgb2hsv(color);
     
-    // Hue rotation (audio-reactive)
-    hsv.x += u_saturation * u_dose * 0.1 * sin(u_time * 0.5 + u_energy * TAU);
+    // Hue rotation (audio-reactive) - gentler at low values
+    hsv.x += satIntensity * 0.15 * sin(u_time * 0.5 + u_energy * TAU);
     hsv.x = fract(hsv.x);
     
-    // Saturation boost
-    hsv.y = hsv.y * (1.0 + u_saturation * u_dose * 0.6);
+    // Saturation boost - preserve original saturation better at low values
+    float satBoost = 1.0 + satIntensity * 0.8;
+    hsv.y = hsv.y * satBoost;
     hsv.y = min(hsv.y, 1.0);
     
-    // Value modulation with audio
-    hsv.z = hsv.z * (0.9 + u_saturation * u_dose * 0.2 + u_energy * 0.1);
+    // Value modulation - prevent highlight blowout with soft clamp
+    float valueMod = 1.0 + satIntensity * 0.15 + u_energy * 0.08;
+    hsv.z = hsv.z * valueMod;
+    hsv.z = hsv.z / (hsv.z + 0.1); // Soft highlight compression
+    hsv.z = hsv.z * 1.1; // Compensate for compression
     
     color = hsv2rgb(hsv);
   }
