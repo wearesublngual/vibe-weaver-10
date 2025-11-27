@@ -15,9 +15,10 @@ const Visualizer = () => {
   const [audioContext, setAudioContext] = useState<AudioContext | null>(null);
   const [analyser, setAnalyser] = useState<AnalyserNode | null>(null);
   const [showControls, setShowControls] = useState(true);
-  const [intensity, setIntensity] = useState([0.5]);
-  const [speed, setSpeed] = useState([0.5]);
-  const [complexity, setComplexity] = useState([0.5]);
+  const [mode, setMode] = useState(1);
+  const [seafloor, setSeafloor] = useState([0.5]);
+  const [storm, setStorm] = useState([0.5]);
+  const [beacon, setBeacon] = useState([0.5]);
 
   useEffect(() => {
     // Generate initial seed
@@ -32,9 +33,10 @@ const Visualizer = () => {
 
   const handleReset = () => {
     setSeed(generateSeed());
-    setIntensity([0.5]);
-    setSpeed([0.5]);
-    setComplexity([0.5]);
+    setMode(1);
+    setSeafloor([0.5]);
+    setStorm([0.5]);
+    setBeacon([0.5]);
   };
 
   return (
@@ -46,9 +48,10 @@ const Visualizer = () => {
       <div className="absolute inset-0">
         <HydraCanvas
           seed={seed}
-          intensity={intensity[0]}
-          speed={speed[0]}
-          complexity={complexity[0]}
+          mode={mode}
+          seafloor={seafloor[0]}
+          storm={storm[0]}
+          beacon={beacon[0]}
           analyser={analyser}
         />
       </div>
@@ -119,65 +122,102 @@ const Visualizer = () => {
             >
               <Card className="border-phosphor/30 bg-card/80 p-6 backdrop-blur-md">
                 <h3 className="mb-4 font-mono text-sm font-semibold text-foreground">
-                  INTERFERENCE CONTROLS
+                  REALITY MODULATION
                 </h3>
 
                 <div className="space-y-6">
+                  {/* Visual Mode Selection */}
                   <div>
-                    <div className="mb-2 flex items-center justify-between">
-                      <label className="font-mono text-xs text-muted-foreground">
-                        INTENSITY
-                      </label>
-                      <span className="font-mono text-xs text-signal">
-                        {(intensity[0] * 100).toFixed(0)}%
-                      </span>
+                    <div className="mb-2 font-mono text-xs text-muted-foreground">
+                      VISUAL MODE
                     </div>
-                    <Slider
-                      value={intensity}
-                      onValueChange={setIntensity}
-                      max={1}
-                      step={0.01}
-                      className="cursor-pointer"
-                    />
+                    <div className="grid grid-cols-3 gap-2">
+                      {[
+                        { id: 1, name: "Portal" },
+                        { id: 2, name: "Drift" },
+                        { id: 3, name: "Bloom" },
+                        { id: 4, name: "Scanner" },
+                        { id: 5, name: "Ritual" },
+                        { id: 6, name: "Tide" },
+                      ].map((m) => (
+                        <Button
+                          key={m.id}
+                          onClick={() => setMode(m.id)}
+                          variant={mode === m.id ? "default" : "outline"}
+                          size="sm"
+                          className={`font-mono text-xs ${
+                            mode === m.id
+                              ? "bg-phosphor text-void hover:bg-phosphor/90"
+                              : "border-phosphor/30 hover:border-phosphor hover:bg-card"
+                          }`}
+                        >
+                          {m.name}
+                        </Button>
+                      ))}
+                    </div>
                   </div>
 
-                  <div>
-                    <div className="mb-2 flex items-center justify-between">
-                      <label className="font-mono text-xs text-muted-foreground">
-                        SPEED
-                      </label>
-                      <span className="font-mono text-xs text-signal">
-                        {(speed[0] * 100).toFixed(0)}%
-                      </span>
+                  <div className="border-t border-phosphor/20 pt-4">
+                    <div className="mb-3 font-mono text-xs text-muted-foreground">
+                      ALTER THE MAP
                     </div>
-                    <Slider
-                      value={speed}
-                      onValueChange={setSpeed}
-                      max={1}
-                      step={0.01}
-                      className="cursor-pointer"
-                    />
+
+                    <div>
+                      <div className="mb-2 flex items-center justify-between">
+                        <label className="font-mono text-xs text-muted-foreground">
+                          SEAFLOOR
+                        </label>
+                        <span className="font-mono text-xs text-signal">
+                          {(seafloor[0] * 100).toFixed(0)}%
+                        </span>
+                      </div>
+                      <Slider
+                        value={seafloor}
+                        onValueChange={setSeafloor}
+                        max={1}
+                        step={0.01}
+                        className="cursor-pointer"
+                      />
+                    </div>
+
+                    <div className="mt-4">
+                      <div className="mb-2 flex items-center justify-between">
+                        <label className="font-mono text-xs text-muted-foreground">
+                          STORM
+                        </label>
+                        <span className="font-mono text-xs text-signal">
+                          {(storm[0] * 100).toFixed(0)}%
+                        </span>
+                      </div>
+                      <Slider
+                        value={storm}
+                        onValueChange={setStorm}
+                        max={1}
+                        step={0.01}
+                        className="cursor-pointer"
+                      />
+                    </div>
+
+                    <div className="mt-4">
+                      <div className="mb-2 flex items-center justify-between">
+                        <label className="font-mono text-xs text-muted-foreground">
+                          BEACON
+                        </label>
+                        <span className="font-mono text-xs text-signal">
+                          {(beacon[0] * 100).toFixed(0)}%
+                        </span>
+                      </div>
+                      <Slider
+                        value={beacon}
+                        onValueChange={setBeacon}
+                        max={1}
+                        step={0.01}
+                        className="cursor-pointer"
+                      />
+                    </div>
                   </div>
 
-                  <div>
-                    <div className="mb-2 flex items-center justify-between">
-                      <label className="font-mono text-xs text-muted-foreground">
-                        COMPLEXITY
-                      </label>
-                      <span className="font-mono text-xs text-signal">
-                        {(complexity[0] * 100).toFixed(0)}%
-                      </span>
-                    </div>
-                    <Slider
-                      value={complexity}
-                      onValueChange={setComplexity}
-                      max={1}
-                      step={0.01}
-                      className="cursor-pointer"
-                    />
-                  </div>
-
-                  <div className="flex gap-2 pt-4">
+                  <div className="flex gap-2 border-t border-phosphor/20 pt-4">
                     {!isPlaying && (
                       <AudioInput onAudioInit={handleAudioInit} />
                     )}

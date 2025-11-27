@@ -4,13 +4,14 @@ import Hydra from "hydra-synth";
 
 interface HydraCanvasProps {
   seed: string;
-  intensity: number;
-  speed: number;
-  complexity: number;
+  mode: number;
+  seafloor: number;
+  storm: number;
+  beacon: number;
   analyser: AnalyserNode | null;
 }
 
-const HydraCanvas = ({ seed, intensity, speed, complexity, analyser }: HydraCanvasProps) => {
+const HydraCanvas = ({ seed, mode, seafloor, storm, beacon, analyser }: HydraCanvasProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const hydraRef = useRef<any>(null);
   const animationRef = useRef<number>();
@@ -37,42 +38,269 @@ const HydraCanvas = ({ seed, intensity, speed, complexity, analyser }: HydraCanv
   useEffect(() => {
     if (!hydraRef.current) return;
 
-    // Generate deterministic parameters from seed
-    const seedNum = seed.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-    const r1 = (seedNum % 100) / 100;
-    const r2 = ((seedNum * 7) % 100) / 100;
-    const r3 = ((seedNum * 13) % 100) / 100;
-
     // Access Hydra's global functions
     // @ts-ignore - Hydra adds global functions
-    const { osc, voronoi, gradient, o0 } = window;
+    const { osc, noise, gradient, shape, o0, time, render } = window;
     
-    if (r1 < 0.33) {
-      // Pattern 1: Kaleidoscope feedback with audio reactivity
-      osc(10 * complexity, 0.1 * speed, r1)
-        .kaleid(3 + Math.floor(r2 * 5))
-        .modulate(o0, intensity * 0.5)
-        .scale(() => analyser ? 1 + (getAudioLevel(analyser) * intensity * 0.3) : 1)
-        .color(r1 * 2, r2 * 2, r3 * 2)
-        .out();
-    } else if (r1 < 0.66) {
-      // Pattern 2: Voronoi with rotation
-      voronoi(5 + complexity * 10, 0.1 * speed, r2)
-        .modulateRotate(osc(8, 0.1 * speed), intensity * 0.3)
-        .scale(() => analyser ? 1 + (getAudioLevel(analyser) * intensity * 0.2) : 1)
-        .color(r2 * 2, r3 * 2, r1 * 2)
-        .out();
-    } else {
-      // Pattern 3: Gradient with feedback
-      gradient(r3)
-        .modulateScale(osc(8 * complexity, 0.05 * speed), intensity)
-        .modulate(o0, 0.5)
-        .scale(() => analyser ? 1 + (getAudioLevel(analyser) * intensity * 0.25) : 1)
-        .color(r3 * 2, r1 * 2, r2 * 2)
-        .out();
+    const fftData = [0, 0, 0, 0];
+    
+    // Update audio data if analyser is available
+    if (analyser) {
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+      analyser.getByteFrequencyData(dataArray);
+      fftData[0] = dataArray[4] / 255;
+      fftData[1] = dataArray[24] / 255;
+      fftData[2] = dataArray[72] / 255;
+      fftData[3] = dataArray[140] / 255;
     }
 
-  }, [seed, intensity, speed, complexity, analyser]);
+    // 6 VISUAL MODES FROM ORIGINAL CODE
+    switch (mode) {
+      case 1: // PORTAL
+        osc(4, 0.03 + storm * 0.18, 0.2)
+          .color(
+            0.7 + 0.3 * beacon,
+            0.1 + 0.5 * beacon,
+            0.5 + 0.5 * beacon
+          )
+          .kaleid(4 + Math.floor(beacon * 4))
+          .modulate(
+            osc(1 + seafloor * 1.5, 0.05 + storm * 0.1, 0.5),
+            () => (0.15 + storm * 0.7) * fftData[0]
+          )
+          .rotate(
+            () => time * (0.01 + storm * 0.06) + fftData[1] * 0.4
+          )
+          .scale(
+            () => 1.0 + seafloor * 0.7 + fftData[0] * 0.5
+          )
+          .modulate(
+            noise(3 + storm * 5, 0.2 + storm * 0.4),
+            () => (0.1 + storm * 0.6) * fftData[2]
+          )
+          .contrast(() => 1 + seafloor * 1.0)
+          .brightness(
+            () => -0.2 + seafloor * 0.4 + beacon * 0.6 + fftData[3] * 0.3
+          )
+          .out(o0);
+        break;
+
+      case 2: // DRIFT
+        {
+          // @ts-ignore - Hydra extends arrays with .fast()
+          const thresh1 = [0.3, 0.7].fast(0.75);
+          // @ts-ignore
+          const thresh2 = [0.3, 0.7].fast(0.5);
+          // @ts-ignore
+          const thresh3 = [0.3, 0.7].fast(0.25);
+          
+          osc(
+            () => 40 + 40 * beacon,
+            () => -0.05 - 0.25 * seafloor,
+            0
+          )
+            .thresh(thresh1, 0)
+            .color(0, () => 0.3 + 0.7 * beacon, 1)
+            .add(
+              osc(
+                () => 24 + 20 * storm,
+                () => 0.08 + 0.25 * fftData[0],
+                0
+              )
+                .thresh(thresh1, 0)
+                .rotate(() => Math.PI / 4 + 0.4 * fftData[1] + storm * 0.3)
+                .color(1, 0, 0)
+                .modulateScale(
+                  osc(
+                    () => 50 + 40 * seafloor,
+                    () => -0.01 - 0.02 * storm,
+                    0
+                  ).thresh(thresh1, 0),
+                  () => 0.5 + 1.5 * seafloor
+                )
+            )
+            .diff(
+              osc(
+                () => 24 + 20 * storm,
+                () => 0.06 + 0.25 * fftData[2],
+                0
+              )
+                .thresh(thresh2, 0)
+                .rotate(() => Math.PI / 2 + 0.5 * fftData[3] + storm * 0.2)
+                .color(1, 0, 1)
+                .modulateScale(
+                  osc(
+                    () => 50 + 40 * beacon,
+                    () => -0.015 - 0.02 * storm,
+                    0
+                  ).thresh(thresh2, 0),
+                  () => 0.5 + 1.3 * beacon
+                )
+            )
+            .modulateRotate(
+              osc(
+                () => 54 + 20 * storm,
+                () => -0.005 - 0.01 * fftData[1],
+                0
+              ).thresh(thresh3, 0),
+              () => 0.2 + storm * 1.2
+            )
+            .modulateScale(
+              osc(
+                () => 44 + 30 * seafloor,
+                () => -0.02 - 0.02 * fftData[0],
+                0
+              ).thresh(thresh3, 0),
+              () => 1.0 + 1.5 * seafloor
+            )
+            .colorama(() => Math.sin(time / 27) * 0.01222 + 9.89)
+            .scale(() => 1.4 + 0.8 * seafloor)
+            .out(o0);
+        }
+        break;
+
+      case 3: // BLOOM
+        osc(8, 0.15, 0.4)
+          .kaleid(9)
+          .color(1.1, 0.6, 1.4)
+          .modulateRepeat(osc(2, 0.05, 0.9), 3, 2, 0.5, 0.2)
+          .modulate(noise(4, 0.25), () => fftData[0] * 0.7)
+          .rotate(() => time * 0.05 + fftData[2] * 0.4)
+          .scale(() => 1.0 + fftData[1] * 0.2)
+          .out(o0);
+        break;
+
+      case 4: // SCANNER
+        {
+          const pattern = () =>
+            osc(
+              () => 80 + 240 * beacon,
+              () => 0.005 + 0.05 * storm,
+              0
+            )
+              .kaleid(() => 20 + Math.round(80 * seafloor))
+              .scale(
+                () => 1.0 + 1.5 * seafloor,
+                () => 0.3 + 0.5 * storm
+              );
+
+          pattern()
+            .scrollX(
+              () => 0.1 + 0.6 * storm,
+              () => 0.01 + 0.05 * (fftData[0] + fftData[1])
+            )
+            .scrollY(
+              () => (fftData[2] - 0.5) * 0.3 * (0.2 + storm),
+              () => 0.01 + 0.05 * fftData[3]
+            )
+            .mult(
+              pattern()
+                .contrast(() => 1.0 + 1.5 * beacon)
+                .brightness(() => -0.2 + 0.6 * beacon + 0.3 * fftData[3])
+            )
+            .out(o0);
+        }
+        break;
+
+      case 5: // RITUAL
+        noise(3, 0.08 + storm * 0.2)
+          .color(
+            () => 0.4 + 0.2 * seafloor,
+            0.3,
+            () => 0.7 + 0.3 * beacon
+          )
+          .pixelate(
+            () => 40 + 80 * (1 - seafloor),
+            () => 30 + 60 * (1 - seafloor)
+          )
+          .modulate(
+            osc(
+              () => 1.0 + 1.5 * storm,
+              () => 0.06 + 0.12 * storm,
+              0.6
+            ).kaleid(() => 3 + Math.round(5 * beacon)),
+            () => 0.1 + (fftData[0] + fftData[1]) * 0.4
+          )
+          .rotate(
+            () => time * (0.01 + 0.03 * storm) + fftData[1] * 0.25
+          )
+          .brightness(() => 0.05 + fftData[2] * 0.35)
+          .out(o0);
+        break;
+
+      case 6: // TIDE
+        osc(
+          () => 150 + 150 * storm,
+          () => 0.04 + 0.18 * fftData[0],
+          () => 1.2 + 1.5 * beacon
+        )
+          .modulate(
+            osc(
+              () => 1 + 3 * storm,
+              () => -0.1 - 0.3 * seafloor,
+              () => 60 + 60 * fftData[1]
+            ).rotate(() => 10 + 10 * beacon)
+          )
+          .mult(
+            osc(
+              () => 150 + 150 * storm,
+              () => -0.05 - 0.2 * fftData[2],
+              2
+            ).pixelate(
+              () => 20 + 80 * (1 - seafloor),
+              () => 20 + 80 * (1 - seafloor)
+            )
+          )
+          .color(
+            () => 0.5 + 0.5 * beacon,
+            () => 0.1 + 0.4 * storm,
+            () => 0.6 + 0.4 * beacon
+          )
+          .modulate(
+            osc(
+              () => 3 + 5 * storm,
+              () => -0.05 - 0.08 * fftData[0]
+            ).rotate(() => 5 + 10 * beacon)
+          )
+          .add(
+            osc(
+              () => 6 + 6 * storm,
+              () => -0.4 - 0.4 * fftData[1],
+              () => 400 + 400 * seafloor
+            ).color(1, 0, 1)
+          )
+          .mult(
+            shape(
+              () => 2 + seafloor * 40,
+              () => 0.15 + 0.5 * storm,
+              1
+            )
+              .luma()
+              .repeatX(() => 1 + Math.round(beacon * 3))
+              .repeatY(() => 1 + Math.round(seafloor * 3))
+              .colorama(() => 0.5 + 9.5 * beacon)
+          )
+          .modulate(
+            osc(
+              () => 4 + 10 * storm,
+              () => -0.1 - 0.2 * fftData[3],
+              () => 400 + 400 * beacon
+            ).rotate(() => 3 + 6 * storm)
+          )
+          .add(
+            osc(
+              () => 2 + 6 * storm,
+              () => 0.4 + 1.0 * fftData[0],
+              () => 80 + 60 * seafloor
+            ).color(0.2, 0, 1)
+          )
+          .out(o0);
+        break;
+    }
+    
+    render(o0);
+
+  }, [seed, mode, seafloor, storm, beacon, analyser]);
 
   return (
     <canvas
