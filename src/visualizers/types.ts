@@ -54,7 +54,7 @@ export const EFFECT_SLIDERS: SliderConfig[] = [
   { 
     key: 'symmetry', 
     label: 'SYMMETRY', 
-    description: 'Kaleidoscopic tiling patterns'
+    description: 'Hyperbolic patterns'
   },
   { 
     key: 'recursion', 
