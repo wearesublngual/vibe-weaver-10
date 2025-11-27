@@ -3,32 +3,39 @@ import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Card } from "@/components/ui/card";
-import { ArrowLeft, RotateCcw, Settings2 } from "lucide-react";
+import { ArrowLeft, RotateCcw, Settings2, Copy, Upload, Sparkles } from "lucide-react";
 import { Link } from "react-router-dom";
 import WebGLCanvas from "@/components/visualizer/WebGLCanvas";
 import TrackPlayer from "@/components/visualizer/TrackPlayer";
 import ImageUpload from "@/components/visualizer/ImageUpload";
 import DebugOverlay from "@/components/visualizer/DebugOverlay";
-import { generateSeed } from "@/lib/seed-generator";
+import { generateSeed, encodeSeed, decodeSeed, isValidSeed } from "@/lib/seed-generator";
 import { VisualizerParams, DEFAULT_PARAMS, EFFECT_SLIDERS, AudioEffectParams, DEFAULT_AUDIO_PARAMS, AUDIO_EFFECT_SLIDERS } from "@/visualizers/types";
 import { AudioEffectsChain } from "@/visualizers/audio-effects-chain";
+import { useToast } from "@/hooks/use-toast";
 const Visualizer = () => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [seed, setSeed] = useState<string>("");
+  const [seedInput, setSeedInput] = useState<string>("");
   const [audioContext, setAudioContext] = useState<AudioContext | null>(null);
   const [analyser, setAnalyser] = useState<AnalyserNode | null>(null);
   const [effectsChain, setEffectsChain] = useState<AudioEffectsChain | null>(null);
   const [showControls, setShowControls] = useState(true);
   const [showDebug, setShowDebug] = useState(false);
   const [sourceImage, setSourceImage] = useState<HTMLImageElement | null>(null);
+  const { toast } = useToast();
 
   // Visual params: dose + 5 effects
   const [params, setParams] = useState<VisualizerParams>(DEFAULT_PARAMS);
 
   // Audio effect params: echo, drift, break
   const [audioParams, setAudioParams] = useState<AudioEffectParams>(DEFAULT_AUDIO_PARAMS);
+  
+  // Generate initial seed from default params on mount
   useEffect(() => {
-    setSeed(generateSeed());
+    const initialSeed = encodeSeed(DEFAULT_PARAMS, DEFAULT_AUDIO_PARAMS);
+    setSeed(initialSeed);
+    setSeedInput(initialSeed);
   }, []);
 
   // Keyboard shortcuts
@@ -57,9 +64,40 @@ const Visualizer = () => {
     setSourceImage(image);
   };
   const handleReset = () => {
-    setSeed(generateSeed());
     setParams(DEFAULT_PARAMS);
     setAudioParams(DEFAULT_AUDIO_PARAMS);
+    const newSeed = encodeSeed(DEFAULT_PARAMS, DEFAULT_AUDIO_PARAMS);
+    setSeed(newSeed);
+    setSeedInput(newSeed);
+    toast({ title: "Reset complete", description: "All settings restored to defaults" });
+  };
+
+  const handleGenerateSeed = () => {
+    const newSeed = encodeSeed(params, audioParams);
+    setSeed(newSeed);
+    setSeedInput(newSeed);
+    toast({ title: "Seed generated", description: "Current settings encoded into seed" });
+  };
+
+  const handleLoadSeed = () => {
+    const decoded = decodeSeed(seedInput);
+    if (decoded) {
+      setParams(decoded.params);
+      setAudioParams(decoded.audioParams);
+      setSeed(seedInput.toUpperCase().startsWith('SR-') ? seedInput.toUpperCase() : `SR-${seedInput.toUpperCase()}`);
+      toast({ title: "Seed loaded", description: "Settings restored from seed" });
+    } else {
+      toast({ title: "Invalid seed", description: "Please enter a valid SR-XXXXXXXXXXXXXXXXXX seed", variant: "destructive" });
+    }
+  };
+
+  const handleCopySeed = async () => {
+    try {
+      await navigator.clipboard.writeText(seed);
+      toast({ title: "Copied!", description: "Seed copied to clipboard" });
+    } catch {
+      toast({ title: "Copy failed", description: "Could not copy to clipboard", variant: "destructive" });
+    }
   };
   const updateParam = (key: keyof VisualizerParams, value: number) => {
     setParams(prev => ({
@@ -230,11 +268,59 @@ const Visualizer = () => {
                   <div className="mb-2 font-mono text-xs text-muted-foreground">
                     SESSION SEED
                   </div>
-                  <div className="mb-3 rounded border border-phosphor/20 bg-void/50 p-2 font-mono text-sm text-phosphor">
-                    {seed}
+                  <p className="mb-2 font-mono text-[10px] text-muted-foreground/60">
+                    save or restore this reality profile
+                  </p>
+                  
+                  {/* Seed Input with Copy Button */}
+                  <div className="mb-3 flex gap-2">
+                    <input
+                      type="text"
+                      value={seedInput}
+                      onChange={(e) => setSeedInput(e.target.value.toUpperCase())}
+                      placeholder="SR-XXXXXXXXXXXXXXXXXX"
+                      className="flex-1 rounded border border-phosphor/20 bg-void/50 px-2 py-1.5 font-mono text-xs text-phosphor placeholder:text-muted-foreground/40 focus:border-phosphor focus:outline-none"
+                    />
+                    <Button
+                      onClick={handleCopySeed}
+                      variant="outline"
+                      size="sm"
+                      className="border-phosphor/30 px-2 hover:border-phosphor hover:bg-card"
+                      title="Copy seed"
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
                   </div>
-                  <Button onClick={handleReset} variant="outline" size="sm" className="w-full border-phosphor/30 font-mono hover:border-phosphor hover:bg-card">
-                    <RotateCcw className="mr-2 h-4 w-4" />
+
+                  {/* Seed Action Buttons */}
+                  <div className="flex gap-2 mb-2">
+                    <Button 
+                      onClick={handleGenerateSeed} 
+                      variant="outline" 
+                      size="sm" 
+                      className="flex-1 border-phosphor/30 font-mono text-xs hover:border-phosphor hover:bg-card"
+                    >
+                      <Sparkles className="mr-1 h-3 w-3" />
+                      Generate
+                    </Button>
+                    <Button 
+                      onClick={handleLoadSeed} 
+                      variant="outline" 
+                      size="sm" 
+                      className="flex-1 border-phosphor/30 font-mono text-xs hover:border-phosphor hover:bg-card"
+                    >
+                      <Upload className="mr-1 h-3 w-3" />
+                      Load
+                    </Button>
+                  </div>
+
+                  <Button 
+                    onClick={handleReset} 
+                    variant="outline" 
+                    size="sm" 
+                    className="w-full border-phosphor/30 font-mono text-xs hover:border-phosphor hover:bg-card"
+                  >
+                    <RotateCcw className="mr-1 h-3 w-3" />
                     Reset All
                   </Button>
                 </div>
