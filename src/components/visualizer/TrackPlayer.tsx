@@ -186,7 +186,7 @@ const TrackPlayer = ({ onAudioInit, audioParams = DEFAULT_AUDIO_PARAMS }: TrackP
           disabled={!currentTrack}
           variant="outline"
           size="sm"
-          className="flex-1 border-phosphor/30 font-mono hover:border-phosphor hover:bg-card"
+          className="flex-1 border-phosphor/30 font-mono text-foreground hover:border-phosphor hover:bg-card hover:text-foreground"
         >
           {isPlaying ? (
             <>
@@ -205,7 +205,7 @@ const TrackPlayer = ({ onAudioInit, audioParams = DEFAULT_AUDIO_PARAMS }: TrackP
           disabled={!currentTrack}
           variant="outline"
           size="sm"
-          className="border-phosphor/30 font-mono hover:border-phosphor hover:bg-card"
+          className="border-phosphor/30 font-mono text-foreground hover:border-phosphor hover:bg-card hover:text-foreground"
         >
           <SkipForward className="h-4 w-4" />
         </Button>

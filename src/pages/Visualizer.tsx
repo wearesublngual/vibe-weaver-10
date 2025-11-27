@@ -31,13 +31,17 @@ const Visualizer = () => {
     setSeed(generateSeed());
   }, []);
 
-  // Keyboard shortcut for debug overlay
+  // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't toggle if typing in an input
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      
       if (e.key === 'd' || e.key === 'D') {
-        // Don't toggle if typing in an input
-        if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
         setShowDebug(prev => !prev);
+      }
+      if (e.key === 'h' || e.key === 'H') {
+        setShowControls(prev => !prev);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -84,11 +88,11 @@ const Visualizer = () => {
         </div>
       </div>
 
-      {/* HUD Edge Text - Bottom Left */}
-      <div className="pointer-events-none absolute bottom-24 left-4 z-20 space-y-1">
+      {/* HUD Edge Text - Top Left */}
+      <div className="pointer-events-none absolute top-20 left-4 z-20 space-y-1">
         <div className="font-mono text-[10px] text-phosphor/40">&gt; listening for future signals_</div>
         <div className="font-mono text-[10px] text-phosphor/40">&gt; music_as_map :: active</div>
-        <div className="font-mono text-[10px] text-muted-foreground/40">&gt; press H to hide HUD</div>
+        <div className="font-mono text-[10px] text-muted-foreground/40">&gt; press H to toggle controls</div>
       </div>
 
       {/* Debug Overlay - Press D to toggle */}
