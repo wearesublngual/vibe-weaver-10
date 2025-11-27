@@ -18,10 +18,10 @@ const smootherStep = (t: number) => t * t * t * (t * (t * 6 - 15) + 10);
 const SLIDER_CURVES: Record<keyof VisualizerParams, { fn: (x: number) => number; name: string }> = {
   dose: { fn: (x) => x, name: "linear" },
   symmetry: { fn: smootherStep, name: "smootherStep" },
-  recursion: { fn: easeOutQuad, name: "easeOutQuad" },
+  recursion: { fn: easeInOutCubic, name: "easeInOutCubic" },
   breathing: { fn: (x) => x, name: "linear" },
   flow: { fn: easeOutQuad, name: "easeOutQuad" },
-  saturation: { fn: easeInOutCubic, name: "easeInOutCubic" },
+  saturation: { fn: easeInQuad, name: "easeInQuad" },
 };
 
 // Zone helper
