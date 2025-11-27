@@ -248,42 +248,37 @@ void main() {
   float beat = state.w;
   
   // ===========================================
-  // ENERGY LAYER MODEL
-  // User sliders set BASE perceptual state
-  // Audio injects ENERGY that temporarily pushes transforms beyond base
+  // TIMING/ANIMATION MODEL (Option C)
+  // User sliders set WHAT transforms happen (intensity stays constant)
+  // Audio controls WHEN/HOW: phase timing, animation speed, oscillation frequency
+  // Transforms stay at user's levels, but MOVE with music
   // ===========================================
   
-  // Base values from user sliders (with perceptual easing)
-  float baseSymmetry = smootherStep(u_symmetry);
-  float baseRecursion = easeInOutCubic(u_recursion);
-  float baseBreathing = u_breathing;
-  float baseFlow = easeOutQuad(u_flow);
-  float baseDose = u_dose;
+  // User-controlled effect intensities (perceptually eased, FIXED by user)
+  float effectiveSymmetry = smootherStep(u_symmetry);
+  float effectiveRecursion = easeInOutCubic(u_recursion);
+  float effectiveBreathing = u_breathing;
+  float effectiveFlow = easeOutQuad(u_flow);
+  float effectiveDose = u_dose;
   
-  // AUDIO ENERGY INJECTION
-  // Each audio band pushes specific transforms beyond base
-  // Formula: effective = base + (audioEnergy * headroom * multiplier)
-  // Headroom ensures we don't exceed 1.0
+  // AUDIO-DRIVEN TIMING VARIABLES
+  // These control rhythm/speed/phase, NOT intensity
   
-  // Energy adds to overall dose (loudness = more intense)
-  float doseEnergy = u_energy * 0.4;
-  float effectiveDose = baseDose + doseEnergy * (1.0 - baseDose);
+  // Bass drives breathing PHASE (kicks sync the pulse timing)
+  float breathPhaseSpeed = 1.5 + u_bass * 4.0 + u_beatIntensity * 3.0;
+  float breathPhaseOffset = u_beatIntensity * PI; // Kicks reset phase toward expansion
   
-  // Beat pulses RECURSION (kicks create tunnel depth)
-  float recursionEnergy = u_beatIntensity * 0.5 + u_bass * 0.3;
-  float effectiveRecursion = baseRecursion + recursionEnergy * (1.0 - baseRecursion);
+  // Low-mid drives flow SPEED (bass guitar makes warping faster)
+  float flowSpeed = 0.02 + u_lowMid * 0.08 + u_energy * 0.04;
   
-  // Mid frequencies push SYMMETRY (vocals/melody → tiling)
-  float symmetryEnergy = u_mid * 0.4;
-  float effectiveSymmetry = baseSymmetry + symmetryEnergy * (1.0 - baseSymmetry);
+  // Mid frequencies drive symmetry ROTATION speed
+  float symmetryRotation = u_mid * 0.3 + u_energy * 0.1;
   
-  // Bass drives BREATHING amplitude (kicks → pulsing)
-  float breathingEnergy = u_bass * 0.6;
-  float effectiveBreathing = baseBreathing + breathingEnergy * (1.0 - baseBreathing);
+  // High frequencies drive shimmer FREQUENCY
+  float shimmerSpeed = 8.0 + u_high * 20.0;
   
-  // Low-mid drives FLOW intensity (bass guitar → warping)
-  float flowEnergy = u_lowMid * 0.5;
-  float effectiveFlow = baseFlow + flowEnergy * (1.0 - baseFlow);
+  // Overall energy affects animation TEMPO (not intensity)
+  float animationTempo = 1.0 + u_energy * 0.5;
   
   // ===========================================
   // APPLY TRANSFORMS with effective values
@@ -303,27 +298,33 @@ void main() {
     coord = mix(coord, kCoord, symmetryStrength);
   }
   
-  // 3. BREATHING - radial pulsing (bass-driven timing + amplitude)
+  // 3. BREATHING - radial pulsing
+  // User controls INTENSITY (how much it pulses)
+  // Audio controls TIMING (when pulses sync to kicks)
   float breathingIntensity = effectiveBreathing * effectiveDose;
   if (breathingIntensity > 0.01) {
     vec2 centered = coord - 0.5;
     float r = length(centered);
-    // Bass drives the phase speed, making breathing sync to kicks
-    float breathPhase = u_time * 2.0 + u_bass * 5.0;
+    // Audio drives phase speed - kicks make breathing sync to rhythm
+    float breathPhase = u_time * breathPhaseSpeed + breathPhaseOffset;
     float breathWave = sin(r * 8.0 - breathPhase) * 0.5 + 0.5;
-    // Amplitude scales with effective breathing (base + audio energy)
+    // User's slider controls the amplitude, audio only controls timing
     float scale = 1.0 + breathWave * breathingIntensity * 0.2;
     coord = centered * scale + 0.5;
   }
   
-  // 4. FLOW - warping distortion (low-mid driven)
+  // 4. FLOW - warping distortion
+  // User controls INTENSITY (how much warping)
+  // Audio controls SPEED (how fast the warp moves)
   float flowIntensity = effectiveFlow * effectiveDose;
   if (flowIntensity > 0.01) {
-    vec4 n = texture(u_noise, coord * 0.5 + u_time * 0.02);
+    // Audio drives flow animation speed
+    vec4 n = texture(u_noise, coord * 0.5 + u_time * flowSpeed * animationTempo);
     vec2 flow = vec2(
-      sin((n.x - 0.5) * TAU + u_time * 0.3),
-      cos((n.y - 0.5) * TAU + u_time * 0.25)
+      sin((n.x - 0.5) * TAU + u_time * 0.3 * animationTempo),
+      cos((n.y - 0.5) * TAU + u_time * 0.25 * animationTempo)
     );
+    // User's slider controls magnitude, audio controls motion speed
     coord += flow * flowIntensity * 0.18;
   }
   
@@ -333,11 +334,10 @@ void main() {
   sampleCoord.y = 1.0 - sampleCoord.y;
   vec3 color = texture(u_image, sampleCoord).rgb;
   
-  // 5. SATURATION - energy layer model
-  // High frequencies drive saturation cycling speed
-  float baseSaturation = easeInQuad(u_saturation);
-  float saturationEnergy = u_high * 0.4 + u_energy * 0.2;
-  float effectiveSaturation = baseSaturation + saturationEnergy * (1.0 - baseSaturation);
+  // 5. SATURATION - Timing model
+  // User controls INTENSITY (how psychedelic the colors get)
+  // Audio controls TIMING (how fast colors cycle/shift)
+  float effectiveSaturation = easeInQuad(u_saturation);
   
   float satRaw = effectiveSaturation * effectiveDose;
   // Front-load with pow(0.25), compress top range
@@ -352,12 +352,12 @@ void main() {
   if (satIntensity > 0.005) {
     vec3 hsv = rgb2hsv(color);
     
-    // PHASE 1 (0-0.2): VIVID - colors POP hard
+    // PHASE 1 (0-0.2): VIVID - colors POP (no audio timing needed)
     float vividPhase = smoothstep(0.0, 0.2, satIntensity);
     hsv.y = hsv.y * (1.0 + vividPhase * 2.5);
     hsv.y = min(hsv.y, 1.0);
     
-    // PHASE 2 (0.15-0.4): Color separation - distinct bands
+    // PHASE 2 (0.15-0.4): Color separation (no audio timing needed)
     float separationPhase = smoothstep(0.15, 0.4, satIntensity);
     if (separationPhase > 0.0) {
       float hueBands = 8.0 - separationPhase * 5.0;
@@ -365,56 +365,56 @@ void main() {
       hsv.x = mix(hsv.x, quantizedHue, separationPhase * 0.8);
     }
     
-    // PHASE 3 (0.35-0.65): Hue rotation - HIGH FREQUENCIES drive speed
+    // PHASE 3 (0.35-0.65): Hue rotation
+    // User controls HOW MUCH rotation (via slider), Audio controls SPEED
     float rotationPhase = smoothstep(0.35, 0.65, satIntensity);
     if (rotationPhase > 0.0) {
-      // High frequencies accelerate hue cycling
-      float hueSpeed = 0.4 + u_high * 1.5;
-      float hueShift = u_time * hueSpeed;
+      // Base slow rotation + audio-driven acceleration
+      float hueSpeed = 0.2 + u_high * 1.2 + u_energy * 0.5;
+      float hueShift = u_time * hueSpeed * animationTempo;
       hueShift += sin(v_uv.x * 6.0 + v_uv.y * 5.0) * 0.25;
       hsv.x = fract(hsv.x + hueShift * rotationPhase);
     }
     
-    // PHASE 4 (0.55-1.0): Psychedelic - rainbow cycling + inversion
+    // PHASE 4 (0.55-1.0): Psychedelic rainbow
+    // User controls INTENSITY, Audio controls CYCLING SPEED
     float psychPhase = smoothstep(0.55, 1.0, satIntensity);
     if (psychPhase > 0.0) {
-      // Rainbow cycling - energy drives speed
-      float lumaHue = hsv.z * 1.5 + u_time * (0.5 + u_energy * 0.8);
+      // Rainbow cycling - audio drives speed only
+      float cycleSpeed = 0.3 + u_energy * 0.6;
+      float lumaHue = hsv.z * 1.5 + u_time * cycleSpeed * animationTempo;
       hsv.x = fract(mix(hsv.x, lumaHue, psychPhase * 0.9));
       
-      // Inversion blend
+      // Inversion blend (intensity only, no audio)
       vec3 inverted = vec3(1.0) - color;
       vec3 invertedHsv = rgb2hsv(inverted);
       hsv.x = fract(mix(hsv.x, invertedHsv.x, psychPhase * 0.5));
       
-      // Max saturation
+      // Max saturation (user controlled)
       hsv.y = mix(hsv.y, 1.0, psychPhase * 0.8);
     }
     
-    // Contrast boost
+    // Contrast boost (user controlled via saturation slider)
     float contrast = 1.0 + satIntensity * 1.5;
     hsv.z = (hsv.z - 0.5) * contrast + 0.5;
     hsv.z = clamp(hsv.z, 0.0, 1.0);
     
-    // Energy brightness pulse
-    hsv.z *= 1.0 + u_energy * satIntensity * 0.3;
-    hsv.z = min(hsv.z, 1.0);
-    
     color = hsv2rgb(hsv);
   }
   
-  // High frequency shimmer overlay
+  // High frequency shimmer - audio controls shimmer SPEED, user controls via saturation
   vec3 shimmer = vec3(
-    sin(u_time * 12.0 + v_uv.x * 30.0) * 0.5 + 0.5,
-    sin(u_time * 12.0 + v_uv.y * 30.0 + 2.0) * 0.5 + 0.5,
-    sin(u_time * 12.0 + (v_uv.x + v_uv.y) * 15.0 + 4.0) * 0.5 + 0.5
+    sin(u_time * shimmerSpeed + v_uv.x * 30.0) * 0.5 + 0.5,
+    sin(u_time * shimmerSpeed + v_uv.y * 30.0 + 2.0) * 0.5 + 0.5,
+    sin(u_time * shimmerSpeed + (v_uv.x + v_uv.y) * 15.0 + 4.0) * 0.5 + 0.5
   );
-  color += shimmer * u_high * effectiveSaturation * effectiveDose * 0.12;
+  color += shimmer * effectiveSaturation * effectiveDose * 0.08;
   
-  // Beat flash - brief white pulse
-  color = mix(color, vec3(1.0, 0.98, 0.95), beat * effectiveDose * 0.35);
+  // Beat flash - subtle white pulse on kicks (separate overlay, not transform intensity)
+  float beatFlash = beat * 0.2;
+  color = mix(color, vec3(1.0, 0.98, 0.95), beatFlash);
   
-  // Vignette
+  // Vignette (user controlled via dose)
   float dist = length(v_uv - 0.5);
   float vignette = 1.0 - dist * effectiveDose * 1.2;
   vignette = smoothstep(0.0, 1.0, vignette);
