@@ -95,8 +95,7 @@ const Index = () => {
               and the Qualia Research Institute.
             </p>
             <p className="font-mono text-xs text-signal/70 leading-loose">All of the perceptual weirdness.
-None of the identity dissolution.
-⚠️ SEIZURE WARNING: Contains intense visual patterns, flickers, and rapid motion. View with caution.<br />
+              <br />
               None of the identity dissolution.
 
 
