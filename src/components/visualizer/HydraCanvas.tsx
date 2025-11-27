@@ -18,12 +18,14 @@ const HydraCanvas = ({ seed, intensity, speed, complexity, analyser }: HydraCanv
   useEffect(() => {
     if (!canvasRef.current) return;
 
-    // Initialize Hydra
-    hydraRef.current = new Hydra({
+    // Initialize Hydra - this sets up global functions
+    const hydra = new Hydra({
       canvas: canvasRef.current,
       detectAudio: false,
       enableStreamCapture: false,
     });
+    
+    hydraRef.current = hydra;
 
     return () => {
       if (animationRef.current) {
@@ -41,29 +43,30 @@ const HydraCanvas = ({ seed, intensity, speed, complexity, analyser }: HydraCanv
     const r2 = ((seedNum * 7) % 100) / 100;
     const r3 = ((seedNum * 13) % 100) / 100;
 
-    // Create audio-reactive visualizations with seed-based variations
-    const h = hydraRef.current;
+    // Access Hydra's global functions
+    // @ts-ignore - Hydra adds global functions
+    const { osc, voronoi, gradient, o0 } = window;
     
     if (r1 < 0.33) {
       // Pattern 1: Kaleidoscope feedback with audio reactivity
-      h.osc(10 * complexity, 0.1 * speed, r1)
+      osc(10 * complexity, 0.1 * speed, r1)
         .kaleid(3 + Math.floor(r2 * 5))
-        .modulate(h.o0, intensity * 0.5)
+        .modulate(o0, intensity * 0.5)
         .scale(() => analyser ? 1 + (getAudioLevel(analyser) * intensity * 0.3) : 1)
         .color(r1 * 2, r2 * 2, r3 * 2)
         .out();
     } else if (r1 < 0.66) {
       // Pattern 2: Voronoi with rotation
-      h.voronoi(5 + complexity * 10, 0.1 * speed, r2)
-        .modulateRotate(h.osc(8, 0.1 * speed), intensity * 0.3)
+      voronoi(5 + complexity * 10, 0.1 * speed, r2)
+        .modulateRotate(osc(8, 0.1 * speed), intensity * 0.3)
         .scale(() => analyser ? 1 + (getAudioLevel(analyser) * intensity * 0.2) : 1)
         .color(r2 * 2, r3 * 2, r1 * 2)
         .out();
     } else {
       // Pattern 3: Gradient with feedback
-      h.gradient(r3)
-        .modulateScale(h.osc(8 * complexity, 0.05 * speed), intensity)
-        .modulate(h.o0, 0.5)
+      gradient(r3)
+        .modulateScale(osc(8 * complexity, 0.05 * speed), intensity)
+        .modulate(o0, 0.5)
         .scale(() => analyser ? 1 + (getAudioLevel(analyser) * intensity * 0.25) : 1)
         .color(r3 * 2, r1 * 2, r2 * 2)
         .out();
