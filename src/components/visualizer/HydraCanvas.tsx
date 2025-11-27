@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 // @ts-ignore - Hydra doesn't have TypeScript definitions
 import Hydra from "hydra-synth";
 import { useStrangeAttractor } from "@/hooks/useStrangeAttractor";
+import { mapToPerceptualZone, mapAudioReactivity } from "@/lib/perceptual-mapping";
 
 interface HydraCanvasProps {
   seed: string;
@@ -19,12 +20,14 @@ const HydraCanvas = ({ seed, mode, seafloor, storm, beacon, analyser }: HydraCan
   const audioLoopRef = useRef<number>();
   
   // Live FFT data ref - updated continuously by animation loop
+  // Using smoothed values for musical feel, not raw jitter
   const fftRef = useRef<number[]>([0, 0, 0, 0]);
+  const fftPeakRef = useRef<number[]>([0, 0, 0, 0]); // Peak hold for punchy response
   
   // Strange attractor for organic evolution
   const { smoothedRef } = useStrangeAttractor(seed);
 
-  // Continuous audio analysis loop
+  // Continuous audio analysis loop with musical smoothing
   useEffect(() => {
     if (!analyser) return;
 
@@ -33,24 +36,42 @@ const HydraCanvas = ({ seed, mode, seafloor, storm, beacon, analyser }: HydraCan
     const updateAudio = () => {
       analyser.getByteFrequencyData(dataArray);
       
-      // Smoothed FFT bands with slight interpolation for less jitter
-      const smooth = 0.3;
       const prev = fftRef.current;
+      const peaks = fftPeakRef.current;
       
-      // Sub-bass (20-60Hz) - bin ~4
-      const newBass = dataArray[4] / 255;
-      // Low-mid (200-500Hz) - bin ~24  
-      const newLowMid = dataArray[24] / 255;
-      // Mid (500-2kHz) - bin ~72
-      const newMid = dataArray[72] / 255;
-      // High (2k-8kHz) - bin ~140
-      const newHigh = dataArray[140] / 255;
+      // Get raw values from frequency bins
+      // Sub-bass (kick drums, bass) - most impactful
+      const rawBass = dataArray[4] / 255;
+      // Low-mid (bass guitar, low synths)
+      const rawLowMid = dataArray[24] / 255;
+      // Mid (vocals, leads)
+      const rawMid = dataArray[72] / 255;
+      // High (hi-hats, cymbals, air)
+      const rawHigh = dataArray[140] / 255;
+      
+      // Different smoothing for different bands - bass is punchy, highs are smooth
+      // Bass: fast attack (0.5), slower release (0.08) for punch
+      const bassSmooth = rawBass > prev[0] ? 0.5 : 0.08;
+      // Low-mid: medium response
+      const lowMidSmooth = rawLowMid > prev[1] ? 0.4 : 0.1;
+      // Mid: balanced
+      const midSmooth = 0.15;
+      // High: very smooth to avoid jitter
+      const highSmooth = 0.1;
       
       fftRef.current = [
-        prev[0] + (newBass - prev[0]) * smooth,
-        prev[1] + (newLowMid - prev[1]) * smooth,
-        prev[2] + (newMid - prev[2]) * smooth,
-        prev[3] + (newHigh - prev[3]) * smooth,
+        prev[0] + (rawBass - prev[0]) * bassSmooth,
+        prev[1] + (rawLowMid - prev[1]) * lowMidSmooth,
+        prev[2] + (rawMid - prev[2]) * midSmooth,
+        prev[3] + (rawHigh - prev[3]) * highSmooth,
+      ];
+      
+      // Peak detection for extra punch on hits
+      fftPeakRef.current = [
+        Math.max(peaks[0] * 0.95, fftRef.current[0]),
+        Math.max(peaks[1] * 0.95, fftRef.current[1]),
+        Math.max(peaks[2] * 0.95, fftRef.current[2]),
+        Math.max(peaks[3] * 0.95, fftRef.current[3]),
       ];
       
       audioLoopRef.current = requestAnimationFrame(updateAudio);
@@ -91,350 +112,314 @@ const HydraCanvas = ({ seed, mode, seafloor, storm, beacon, analyser }: HydraCan
     // @ts-ignore - Hydra adds global functions
     const { osc, noise, gradient, shape, o0, time, render } = window;
 
-    // Live FFT getters - read from continuously updated ref
-    const fft = (band: number) => fftRef.current[band] || 0;
+    // Apply perceptual zone mapping to slider values
+    const pSeafloor = mapToPerceptualZone(seafloor);
+    const pStorm = mapToPerceptualZone(storm);
+    const pBeacon = mapToPerceptualZone(beacon);
 
-    // Hyperbolic geometry helpers - perceptual curvature
-    const hyperbolicDensity = (baseValue: number, storm: number) => {
-      // At low storm: normal spacing
-      // At high storm: exponential density increase (hyperbolic packing)
-      return baseValue * (1 + storm * 2.5);
+    // Musical FFT getters - apply perceptual mapping to audio reactivity
+    const fft = (band: number) => {
+      const raw = fftRef.current[band] || 0;
+      return mapAudioReactivity(raw, pStorm);
+    };
+    
+    // Peak getter for punchy moments
+    const fftPeak = (band: number) => {
+      const raw = fftPeakRef.current[band] || 0;
+      return mapAudioReactivity(raw, pStorm);
     };
 
-    const hyperbolicBranching = (baseSegments: number, storm: number) => {
-      // Discrete steps: 4 → 6 → 8 → 12 → 16 → 20
-      // More branches = more hyperbolic feel
-      const branchFactor = Math.floor(1 + storm * 5);
-      return Math.min(baseSegments + branchFactor * 2, 20);
+    // Gentler hyperbolic helpers with perceptual mapping
+    const hyperbolicDensity = (baseValue: number, intensity: number) => {
+      // Much gentler curve - never gets too dense
+      return baseValue * (1 + Math.sqrt(intensity) * 1.5);
     };
 
-    const hyperbolicWarp = (baseAmount: number, storm: number) => {
-      // Non-linear warp: mild at low storm, intense curved feel at high
-      return baseAmount * (0.5 + storm * 1.5) * (1 + storm * storm * 0.8);
+    const hyperbolicBranching = (baseSegments: number, intensity: number) => {
+      // Fewer, more gradual steps
+      const branchFactor = Math.floor(1 + intensity * 3);
+      return Math.min(baseSegments + branchFactor, 12);
     };
 
-    // Strange attractor modulation getters - read live from smoothed ref
-    const getRotationDrift = () => smoothedRef.current.rotationDrift;
-    const getWobbleAmount = () => smoothedRef.current.wobbleAmount;
+    const hyperbolicWarp = (baseAmount: number, intensity: number) => {
+      // Much gentler warp - sqrt for softer curve
+      return baseAmount * (0.3 + Math.sqrt(intensity) * 0.7);
+    };
+
+    // Strange attractor modulation - scaled down for subtlety
+    const getRotationDrift = () => smoothedRef.current.rotationDrift * 0.5;
+    const getWobbleAmount = () => smoothedRef.current.wobbleAmount * 0.6;
     const getColorShift = () => smoothedRef.current.colorShift;
-    const getScaleBreath = () => smoothedRef.current.scaleBreath;
-    const getAsymmetryBias = () => smoothedRef.current.asymmetryBias;
+    const getScaleBreath = () => 1 + (smoothedRef.current.scaleBreath - 1) * 0.3;
+    const getAsymmetryBias = () => smoothedRef.current.asymmetryBias * 0.3;
 
     // 6 VISUAL MODES FROM ORIGINAL CODE
     switch (mode) {
-      case 1: // PORTAL - Hyperbolic iris/mandala with strange attractor evolution
+      case 1: // PORTAL - Iris/mandala with musical breathing
         osc(
-          () => hyperbolicDensity(4, storm * 0.3),
-          () => 0.03 + storm * 0.18 + getRotationDrift() * 0.05, // Attractor-driven speed variation
+          () => hyperbolicDensity(4, pStorm * 0.3),
+          () => 0.02 + pStorm * 0.08 + getRotationDrift() * 0.02, // Slower base
           0.2
         )
           .color(
-            () => 0.7 + 0.3 * beacon + getColorShift() * 0.2, // Attractor color drift
-            () => 0.1 + 0.5 * beacon + (1 - getColorShift()) * 0.15,
-            () => 0.5 + 0.5 * beacon + getColorShift() * 0.1
+            () => 0.7 + 0.3 * pBeacon + getColorShift() * 0.15,
+            () => 0.1 + 0.5 * pBeacon + (1 - getColorShift()) * 0.1,
+            () => 0.5 + 0.5 * pBeacon + getColorShift() * 0.1
           )
-          .kaleid(() => hyperbolicBranching(4 + Math.floor(beacon * 4), storm))
+          .kaleid(() => hyperbolicBranching(4 + Math.floor(pBeacon * 3), pStorm))
           .modulate(
             osc(
-              () => hyperbolicDensity(1 + seafloor * 1.5, storm * 0.4),
-              () => 0.05 + storm * 0.1 + getWobbleAmount() * 0.03,
+              () => hyperbolicDensity(1 + pSeafloor * 1.2, pStorm * 0.3),
+              () => 0.03 + pStorm * 0.05 + getWobbleAmount() * 0.02,
               0.5
             ),
-            () => hyperbolicWarp(0.15 + getWobbleAmount() * 0.1, storm) * fft(0)
+            () => hyperbolicWarp(0.1 + getWobbleAmount() * 0.05, pStorm) * fft(0) // Bass drives modulation
           )
           .rotate(
-            () => time * (0.01 + storm * 0.06 + getRotationDrift() * 0.02) + fft(1) * 0.4
+            () => time * (0.01 + pStorm * 0.03 + getRotationDrift() * 0.01) + fft(1) * 0.15 // Slower rotation
           )
           .scale(
-            () => (1.0 + seafloor * 0.7 + fft(0) * 0.5) * getScaleBreath(),
-            () => (1.0 + storm * 0.3) * getScaleBreath() + getAsymmetryBias()
+            () => (1.0 + pSeafloor * 0.4 + fft(0) * 0.25) * getScaleBreath(), // Bass creates breathing
+            () => (1.0 + pStorm * 0.2) * getScaleBreath() + getAsymmetryBias()
           )
           .modulate(
             noise(
-              () => hyperbolicDensity(3, storm),
-              () => 0.2 + storm * 0.4 + getWobbleAmount() * 0.15
+              () => hyperbolicDensity(3, pStorm),
+              () => 0.15 + pStorm * 0.2 + getWobbleAmount() * 0.1
             ),
-            () => hyperbolicWarp(0.1, storm) * fft(2)
+            () => hyperbolicWarp(0.05, pStorm) * fft(2) // Mid frequencies add texture
           )
-          .contrast(() => 1 + seafloor * 1.0)
+          .contrast(() => 1 + pSeafloor * 0.6)
           .brightness(
-            () => -0.2 + seafloor * 0.4 + beacon * 0.6 + fft(3) * 0.3
+            () => -0.15 + pSeafloor * 0.3 + pBeacon * 0.4 + fft(3) * 0.15 // Highs add sparkle
           )
           .out(o0);
         break;
 
-      case 2: // DRIFT - Hyperbolic wave interference with organic evolution
+      case 2: // DRIFT - Gentle flowing layers with musical pulse
         {
-          // @ts-ignore - Hydra extends arrays with .fast()
-          const thresh1 = [0.3, 0.7].fast(0.75);
-          // @ts-ignore
-          const thresh2 = [0.3, 0.7].fast(0.5);
-          // @ts-ignore
-          const thresh3 = [0.3, 0.7].fast(0.25);
-          
+          // Slow, flowing wave layers instead of harsh thresholds
           osc(
-            () => hyperbolicDensity(40 + 40 * beacon, storm * 0.5),
-            () => -0.05 - 0.25 * seafloor + getRotationDrift() * 0.03,
-            0
+            () => 12 + 8 * pBeacon, // Much lower frequency
+            () => 0.02 + 0.03 * pStorm + getRotationDrift() * 0.01, // Very slow
+            () => 0.8 + fft(0) * 0.4 // Bass affects color spread
           )
-            .thresh(thresh1, 0)
             .color(
-              () => getColorShift() * 0.15,
-              () => 0.3 + 0.7 * beacon + (1 - getColorShift()) * 0.1,
-              1
+              () => 0.2 + 0.3 * pBeacon + getColorShift() * 0.2,
+              () => 0.4 + 0.4 * pBeacon,
+              () => 0.8 + 0.2 * pStorm
             )
-            .add(
+            .rotate(() => time * 0.02 + fft(1) * 0.1) // Gentle rotation
+            .layer(
               osc(
-                () => hyperbolicDensity(24 + 20 * storm, storm * 0.6),
-                () => 0.08 + 0.25 * fft(0) + getWobbleAmount() * 0.04,
-                0
+                () => 8 + 6 * pSeafloor,
+                () => -0.015 - 0.02 * pStorm,
+                () => 0.6 + fft(0) * 0.3
               )
-                .thresh(thresh1, 0)
-                .rotate(() => Math.PI / 4 + 0.4 * fft(1) + storm * 0.3 + getRotationDrift() * 0.15)
-                .color(1, () => getColorShift() * 0.2, 0)
-                .modulateScale(
+                .color(
+                  () => 0.6 + getColorShift() * 0.2,
+                  () => 0.2 + 0.3 * pBeacon,
+                  () => 0.5 + 0.3 * pStorm
+                )
+                .rotate(() => -time * 0.015 + fft(2) * 0.08)
+                .mult(
                   osc(
-                    () => hyperbolicDensity(50 + 40 * seafloor, storm * 0.4),
-                    () => -0.01 - 0.02 * storm,
-                    0
-                  ).thresh(thresh1, 0),
-                  () => hyperbolicWarp(0.5 + 1.5 * seafloor + getWobbleAmount() * 0.2, storm * 0.3)
+                    () => 4 + 4 * pStorm,
+                    () => 0.01 + fft(0) * 0.02,
+                    0.5
+                  ),
+                  () => 0.4 + 0.3 * pSeafloor
                 )
             )
-            .diff(
+            .modulate(
               osc(
-                () => hyperbolicDensity(24 + 20 * storm, storm * 0.6),
-                () => 0.06 + 0.25 * fft(2) + getWobbleAmount() * 0.04,
-                0
-              )
-                .thresh(thresh2, 0)
-                .rotate(() => Math.PI / 2 + 0.5 * fft(3) + storm * 0.2 + getRotationDrift() * 0.1)
-                .color(1, () => getColorShift() * 0.15, 1)
-                .modulateScale(
-                  osc(
-                    () => hyperbolicDensity(50 + 40 * beacon, storm * 0.4),
-                    () => -0.015 - 0.02 * storm,
-                    0
-                  ).thresh(thresh2, 0),
-                  () => hyperbolicWarp(0.5 + 1.3 * beacon + getWobbleAmount() * 0.15, storm * 0.3)
-                )
+                () => 3 + 2 * pStorm,
+                () => 0.02 + fft(1) * 0.01
+              ),
+              () => 0.05 + fft(0) * 0.1 * pStorm // Bass creates gentle waves
             )
-            .modulateRotate(
-              osc(
-                () => hyperbolicDensity(54 + 20 * storm, storm * 0.5),
-                () => -0.005 - 0.01 * fft(1) + getRotationDrift() * 0.01,
-                0
-              ).thresh(thresh3, 0),
-              () => hyperbolicWarp(0.2 + getWobbleAmount() * 0.1, storm * 1.2)
-            )
-            .modulateScale(
-              osc(
-                () => hyperbolicDensity(44 + 30 * seafloor, storm * 0.4),
-                () => -0.02 - 0.02 * fft(0),
-                0
-              ).thresh(thresh3, 0),
-              () => hyperbolicWarp(1.0 + 1.5 * seafloor, storm * 0.2)
-            )
-            .colorama(() => Math.sin(time / 27) * 0.01222 + 9.89 + getColorShift() * 0.02)
             .scale(
-              () => (1.4 + 0.8 * seafloor) * getScaleBreath(),
-              () => (1.4 + 0.8 * seafloor + storm * 0.4) * getScaleBreath() + getAsymmetryBias()
+              () => (1.1 + fft(0) * 0.15) * getScaleBreath(), // Breathe with bass
+              () => (1.1 + fft(0) * 0.15) * getScaleBreath()
             )
+            .brightness(() => -0.1 + fft(3) * 0.15 + pBeacon * 0.2)
+            .contrast(() => 1.1 + pSeafloor * 0.3)
             .out(o0);
         }
         break;
 
-      case 3: // BLOOM - Hyperbolic flower/mandala with organic evolution
+      case 3: // BLOOM - Flower/mandala with musical pulse
         osc(
-          () => hyperbolicDensity(8, storm * 0.4),
-          () => 0.15 + storm * 0.1 + getRotationDrift() * 0.04,
+          () => hyperbolicDensity(6, pStorm * 0.3),
+          () => 0.08 + pStorm * 0.05 + getRotationDrift() * 0.02,
           0.4
         )
-          .kaleid(() => hyperbolicBranching(9, storm))
+          .kaleid(() => hyperbolicBranching(7, pStorm))
           .color(
-            () => 1.1 + getColorShift() * 0.2,
-            () => 0.6 + (1 - getColorShift()) * 0.2,
-            () => 1.4 + getColorShift() * 0.15
+            () => 0.9 + getColorShift() * 0.15 + fft(0) * 0.1, // Bass warms color
+            () => 0.5 + (1 - getColorShift()) * 0.15,
+            () => 1.1 + getColorShift() * 0.1
           )
           .modulateRepeat(
             osc(
-              () => hyperbolicDensity(2, storm * 0.3),
-              () => 0.05 + getWobbleAmount() * 0.02,
-              0.9
+              () => hyperbolicDensity(2, pStorm * 0.2),
+              () => 0.03 + getWobbleAmount() * 0.01,
+              0.8
             ),
-            () => 3 + Math.floor(storm * 3),
+            () => 2 + Math.floor(pStorm * 2),
             2,
-            0.5,
-            0.2
+            0.4,
+            0.15
           )
           .modulate(
             noise(
-              () => hyperbolicDensity(4, storm),
-              () => 0.25 + getWobbleAmount() * 0.1
+              () => hyperbolicDensity(3, pStorm),
+              () => 0.15 + getWobbleAmount() * 0.08
             ),
-            () => hyperbolicWarp(fft(0) * 0.7 + getWobbleAmount() * 0.15, storm * 0.5)
+            () => hyperbolicWarp(fft(0) * 0.4 + getWobbleAmount() * 0.1, pStorm * 0.4) // Bass modulation
           )
-          .rotate(() => time * (0.05 + getRotationDrift() * 0.02) + fft(2) * 0.4)
+          .rotate(() => time * (0.02 + getRotationDrift() * 0.01) + fft(2) * 0.15) // Slower rotation
           .scale(
-            () => (1.0 + fft(1) * 0.2 + seafloor * 0.3) * getScaleBreath(),
-            () => (1.0 + fft(1) * 0.2 + seafloor * 0.3 + storm * 0.2) * getScaleBreath() + getAsymmetryBias()
+            () => (1.0 + fft(0) * 0.15 + pSeafloor * 0.2) * getScaleBreath(), // Bass breathing
+            () => (1.0 + fft(0) * 0.15 + pSeafloor * 0.2 + pStorm * 0.1) * getScaleBreath() + getAsymmetryBias()
           )
+          .brightness(() => fft(3) * 0.1) // Highs add sparkle
           .out(o0);
         break;
 
-      case 4: // SCANNER - Hyperbolic scan lines/moiré with organic evolution
+      case 4: // SCANNER - Stable moiré patterns with musical breathing
         {
+          // Calmer base pattern - lower frequency, slower movement
           const pattern = () =>
             osc(
-              () => hyperbolicDensity(80 + 240 * beacon, storm * 0.6),
-              () => 0.005 + 0.05 * storm + getRotationDrift() * 0.02,
+              () => 30 + 40 * pBeacon, // Much lower base frequency
+              () => 0.003 + 0.01 * pStorm, // Very slow base movement
               0
             )
-              .kaleid(() => hyperbolicBranching(20 + Math.round(80 * seafloor), storm * 0.7))
+              .kaleid(() => 6 + Math.round(6 * pSeafloor)) // Fewer segments
               .scale(
-                () => (1.0 + 1.5 * seafloor + storm * 0.3) * getScaleBreath(),
-                () => (0.3 + 0.5 * storm + seafloor * 0.4) * getScaleBreath() + getAsymmetryBias()
+                () => (1.2 + 0.5 * pSeafloor) * getScaleBreath(),
+                () => (1.0 + 0.3 * pStorm) * getScaleBreath()
               );
 
           pattern()
             .scrollX(
-              () => hyperbolicWarp(0.1 + 0.6 * storm + getWobbleAmount() * 0.1, storm * 0.4),
-              () => 0.01 + 0.05 * (fft(0) + fft(1)) + getRotationDrift() * 0.02
+              () => 0.1 + 0.2 * pStorm,
+              () => 0.005 + fft(0) * 0.015 // Gentle bass-driven scroll
             )
             .scrollY(
-              () => (fft(2) - 0.5) * 0.3 * (0.2 + storm) * (1 + storm * 0.5) + getAsymmetryBias() * 0.3,
-              () => 0.01 + 0.05 * fft(3) + getRotationDrift() * 0.015
+              () => 0.05 + fft(1) * 0.08, // Subtle mid response
+              () => 0.003 + fft(0) * 0.01
             )
             .mult(
               pattern()
-                .contrast(() => 1.0 + 1.5 * beacon + getWobbleAmount() * 0.2)
-                .brightness(() => -0.2 + 0.6 * beacon + 0.3 * fft(3) + getColorShift() * 0.1)
+                .rotate(() => Math.PI / 4 + time * 0.01)
+                .contrast(() => 1.0 + 0.5 * pBeacon)
+                .brightness(() => -0.1 + 0.4 * pBeacon + fft(0) * 0.2)
+            )
+            .color(
+              () => 0.3 + 0.4 * pBeacon + getColorShift() * 0.2,
+              () => 0.5 + 0.3 * pStorm,
+              () => 0.7 + 0.3 * pSeafloor
             )
             .modulate(
-              noise(
-                () => hyperbolicDensity(5, storm),
-                () => 0.1 + getWobbleAmount() * 0.05
-              ),
-              () => storm * 0.15 + getWobbleAmount() * 0.05
+              noise(3, 0.05),
+              () => 0.02 + fft(0) * 0.05 * pStorm // Subtle warping on bass
             )
+            .brightness(() => fft(3) * 0.1) // Highs add sparkle
             .out(o0);
         }
         break;
 
-      case 5: // RITUAL - Hyperbolic pixelated sacred geometry with attractor evolution
+      case 5: // RITUAL - Sacred geometry with musical breathing
         noise(
-          () => hyperbolicDensity(3, storm),
-          () => 0.08 + storm * 0.2 + getWobbleAmount() * 0.05
+          () => hyperbolicDensity(2.5, pStorm),
+          () => 0.05 + pStorm * 0.1 + getWobbleAmount() * 0.03
         )
           .color(
-            () => 0.4 + 0.2 * seafloor + getColorShift() * 0.15,
-            () => 0.3 + (1 - getColorShift()) * 0.1,
-            () => 0.7 + 0.3 * beacon + getColorShift() * 0.1
+            () => 0.4 + 0.2 * pSeafloor + getColorShift() * 0.1,
+            () => 0.3 + (1 - getColorShift()) * 0.08,
+            () => 0.6 + 0.3 * pBeacon + getColorShift() * 0.08
           )
           .pixelate(
-            () => Math.max(8, 40 + 80 * (1 - seafloor) - storm * 30),
-            () => Math.max(8, 30 + 60 * (1 - seafloor) - storm * 20)
+            () => Math.max(12, 50 + 60 * (1 - pSeafloor) - pStorm * 20), // Larger minimum pixels
+            () => Math.max(12, 40 + 50 * (1 - pSeafloor) - pStorm * 15)
           )
           .modulate(
             osc(
-              () => hyperbolicDensity(1.0 + 1.5 * storm, storm * 0.5),
-              () => 0.06 + 0.12 * storm + getRotationDrift() * 0.03,
-              0.6
-            ).kaleid(() => hyperbolicBranching(3 + Math.round(5 * beacon), storm)),
-            () => hyperbolicWarp(0.1 + (fft(0) + fft(1)) * 0.4 + getWobbleAmount() * 0.1, storm * 0.6)
+              () => hyperbolicDensity(1.0 + pStorm * 0.8, pStorm * 0.3),
+              () => 0.03 + 0.05 * pStorm + getRotationDrift() * 0.01,
+              0.5
+            ).kaleid(() => hyperbolicBranching(3 + Math.round(3 * pBeacon), pStorm)),
+            () => hyperbolicWarp(0.05 + fft(0) * 0.15 + getWobbleAmount() * 0.05, pStorm * 0.4) // Bass modulation
           )
           .rotate(
-            () => time * (0.01 + 0.03 * storm + getRotationDrift() * 0.015) + fft(1) * 0.25
+            () => time * (0.008 + 0.015 * pStorm + getRotationDrift() * 0.008) + fft(1) * 0.1 // Slower
           )
           .scale(
-            () => (1.0 + storm * 0.3) * getScaleBreath(),
-            () => (1.0 + storm * 0.4) * getScaleBreath() + getAsymmetryBias()
+            () => (1.0 + pStorm * 0.2 + fft(0) * 0.1) * getScaleBreath(), // Bass breathing
+            () => (1.0 + pStorm * 0.25 + fft(0) * 0.1) * getScaleBreath() + getAsymmetryBias()
           )
-          .brightness(() => 0.05 + fft(2) * 0.35)
+          .brightness(() => 0.02 + fft(2) * 0.2 + fft(3) * 0.08) // Mids and highs add life
           .out(o0);
         break;
 
-      case 6: // TIDE - Hyperbolic wave complex with organic evolution
+      case 6: // TIDE - Oceanic waves with musical pulse
         osc(
-          () => hyperbolicDensity(150 + 150 * storm, storm * 0.7),
-          () => 0.04 + 0.18 * fft(0) + getRotationDrift() * 0.04,
-          () => 1.2 + 1.5 * beacon + getColorShift() * 0.3
+          () => 20 + 30 * pStorm, // Much lower frequency - visible waves
+          () => 0.02 + fft(0) * 0.04, // Slow base, bass pulses it
+          () => 0.8 + 0.6 * pBeacon + getColorShift() * 0.2
         )
-          .modulate(
-            osc(
-              () => hyperbolicDensity(1 + 3 * storm, storm * 0.5),
-              () => -0.1 - 0.3 * seafloor + getWobbleAmount() * 0.05,
-              () => 60 + 60 * fft(1)
-            ).rotate(() => 10 + 10 * beacon + getRotationDrift() * 2),
-            () => hyperbolicWarp(0.05 + getWobbleAmount() * 0.03, storm * 0.8)
-          )
-          .mult(
-            osc(
-              () => hyperbolicDensity(150 + 150 * storm, storm * 0.6),
-              () => -0.05 - 0.2 * fft(2) + getRotationDrift() * 0.03,
-              2
-            ).pixelate(
-              () => Math.max(8, 20 + 80 * (1 - seafloor) - storm * 25),
-              () => Math.max(8, 20 + 80 * (1 - seafloor) - storm * 25)
-            )
-          )
           .color(
-            () => 0.5 + 0.5 * beacon + getColorShift() * 0.15,
-            () => 0.1 + 0.4 * storm + (1 - getColorShift()) * 0.1,
-            () => 0.6 + 0.4 * beacon + getColorShift() * 0.1
+            () => 0.3 + 0.4 * pBeacon + getColorShift() * 0.15,
+            () => 0.5 + 0.3 * pStorm,
+            () => 0.7 + 0.3 * pSeafloor
           )
           .modulate(
             osc(
-              () => hyperbolicDensity(3 + 5 * storm, storm * 0.5),
-              () => -0.05 - 0.08 * fft(0) + getWobbleAmount() * 0.02
-            ).rotate(() => 5 + 10 * beacon + getRotationDrift() * 1.5),
-            () => hyperbolicWarp(0.03 + getWobbleAmount() * 0.02, storm * 0.9)
+              () => 3 + 3 * pStorm,
+              () => -0.02 - 0.03 * pSeafloor,
+              () => 1 + fft(1) * 0.5 // Low-mid affects modulation
+            ).rotate(() => time * 0.01 + getRotationDrift() * 0.5),
+            () => 0.03 + fft(0) * 0.08 // Bass creates wave ripples
           )
-          .add(
-            osc(
-              () => hyperbolicDensity(6 + 6 * storm, storm * 0.4),
-              () => -0.4 - 0.4 * fft(1) + getRotationDrift() * 0.06,
-              () => 400 + 400 * seafloor
-            ).color(
-              () => 1 + getColorShift() * 0.1,
-              () => getColorShift() * 0.15,
-              1
-            )
-          )
-          .mult(
-            shape(
-              () => 2 + seafloor * 40,
-              () => 0.15 + 0.5 * storm + getWobbleAmount() * 0.1,
-              1
-            )
-              .luma()
-              .repeatX(() => 1 + Math.round(beacon * 3) + Math.floor(storm * 2))
-              .repeatY(() => 1 + Math.round(seafloor * 3) + Math.floor(storm * 2))
-              .colorama(() => 0.5 + 9.5 * beacon + getColorShift() * 0.5)
-          )
-          .modulate(
-            osc(
-              () => hyperbolicDensity(4 + 10 * storm, storm * 0.6),
-              () => -0.1 - 0.2 * fft(3) + getRotationDrift() * 0.03,
-              () => 400 + 400 * beacon
-            ).rotate(() => 3 + 6 * storm + getRotationDrift() * 0.5),
-            () => hyperbolicWarp(0.04 + getWobbleAmount() * 0.02, storm * 1.0)
-          )
-          .add(
-            osc(
-              () => hyperbolicDensity(2 + 6 * storm, storm * 0.3),
-              () => 0.4 + 1.0 * fft(0) + getWobbleAmount() * 0.1,
-              () => 80 + 60 * seafloor
-            ).color(
-              () => 0.2 + getColorShift() * 0.1,
-              () => getColorShift() * 0.1,
-              1
-            )
-          )
+          .rotate(() => time * 0.008 + fft(1) * 0.05) // Very slow rotation
           .scale(
-            () => (1.0 + storm * 0.25) * getScaleBreath(),
-            () => (1.0 + storm * 0.35) * getScaleBreath() + getAsymmetryBias()
+            () => (1.0 + fft(0) * 0.12) * getScaleBreath(), // Breathe with bass
+            () => (1.0 + fft(0) * 0.12) * getScaleBreath()
           )
+          .layer(
+            osc(
+              () => 8 + 12 * pSeafloor,
+              () => 0.015 + fft(0) * 0.02,
+              () => 0.5 + 0.4 * pBeacon
+            )
+              .color(
+                () => 0.5 + 0.3 * pBeacon,
+                () => 0.2 + 0.2 * pStorm + getColorShift() * 0.1,
+                () => 0.6 + 0.2 * pSeafloor
+              )
+              .rotate(() => -time * 0.006)
+              .mult(
+                shape(
+                  () => 3 + Math.round(pSeafloor * 4),
+                  () => 0.3 + 0.4 * pStorm + fft(0) * 0.15,
+                  0.8
+                )
+                  .scale(() => 1.5 + fft(0) * 0.3)
+                  .rotate(() => time * 0.01),
+                () => 0.3 + 0.3 * pSeafloor
+              )
+          )
+          .modulate(
+            noise(
+              () => 2 + 2 * pStorm,
+              () => 0.03 + fft(1) * 0.02
+            ),
+            () => 0.02 + fft(0) * 0.04 * pStorm // Gentle warping on bass
+          )
+          .brightness(() => -0.05 + fft(3) * 0.1 + pBeacon * 0.15)
+          .contrast(() => 1.05 + pSeafloor * 0.2)
           .out(o0);
         break;
     }
