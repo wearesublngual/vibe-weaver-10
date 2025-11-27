@@ -64,12 +64,9 @@ vec2 logPolar(vec2 uv, float intensity) {
 
 vec2 kaleidoscope(vec2 uv, float segments) {
   vec2 centered = uv - 0.5;
-  float r = length(centered);
-  if (r < 0.001) return uv; // Avoid center singularity
   float angle = atan(centered.y, centered.x);
+  float r = length(centered);
   float segmentAngle = TAU / segments;
-  // Offset to move seam away from left edge
-  angle = angle + PI + segmentAngle * 0.5;
   angle = mod(angle, segmentAngle);
   angle = abs(angle - segmentAngle * 0.5);
   return vec2(cos(angle), sin(angle)) * r + 0.5;
@@ -179,12 +176,9 @@ vec2 logPolar(vec2 uv, float intensity) {
 
 vec2 kaleidoscope(vec2 uv, float segments) {
   vec2 centered = uv - 0.5;
-  float r = length(centered);
-  if (r < 0.001) return uv; // Avoid center singularity
   float angle = atan(centered.y, centered.x);
+  float r = length(centered);
   float segmentAngle = TAU / segments;
-  // Offset to move seam away from left edge  
-  angle = angle + PI + segmentAngle * 0.5;
   angle = mod(angle, segmentAngle);
   angle = abs(angle - segmentAngle * 0.5);
   return vec2(cos(angle), sin(angle)) * r + 0.5;
