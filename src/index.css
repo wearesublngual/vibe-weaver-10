@@ -145,7 +145,7 @@ All colors MUST be HSL.
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    font-size: 1.3em;
+    font-size: 1em;
     color: hsl(var(--deep-blue));
     z-index: 0;
     opacity: 0.9;
