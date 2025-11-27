@@ -92,7 +92,7 @@ const Index = () => {
             }}
             className="mt-4 font-mono text-xs tracking-[0.3em] text-signal uppercase"
           >
-            Visualizer
+            Official Album Visualizer
           </motion.p>
         </motion.div>
 
