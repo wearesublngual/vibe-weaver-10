@@ -121,8 +121,6 @@ const Index = () => {
               All of the perceptual weirdness.
               <br />
               None of the identity dissolution.
-              <br />
-              ⚠️ SEIZURE WARNING: Contains intense visual patterns, flickers, and rapid motion. View with caution.
             </p>
           </motion.div>
 
