@@ -1,19 +1,24 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Play, Pause, SkipForward, Music2 } from "lucide-react";
 import { tracks, ALBUM_TITLE, Track } from "@/lib/soma-tracks";
+import { AudioEffectsChain, AudioEffectParams, DEFAULT_AUDIO_PARAMS } from "@/visualizers/audio-effects-chain";
 
 interface TrackPlayerProps {
-  onAudioInit: (context: AudioContext, analyser: AnalyserNode) => void;
+  onAudioInit: (context: AudioContext, analyser: AnalyserNode, effectsChain: AudioEffectsChain) => void;
+  audioParams?: AudioEffectParams;
 }
 
-const TrackPlayer = ({ onAudioInit }: TrackPlayerProps) => {
+const TrackPlayer = ({ onAudioInit, audioParams = DEFAULT_AUDIO_PARAMS }: TrackPlayerProps) => {
   const [currentTrack, setCurrentTrack] = useState<Track | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
+  const effectsChainRef = useRef<AudioEffectsChain | null>(null);
+  const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
+  const animationRef = useRef<number | null>(null);
 
   useEffect(() => {
     // Create audio element
@@ -26,10 +31,31 @@ const TrackPlayer = ({ onAudioInit }: TrackPlayerProps) => {
 
     return () => {
       audio.removeEventListener("ended", handleNext);
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
+      if (effectsChainRef.current) {
+        effectsChainRef.current.dispose();
+      }
       if (audioContextRef.current && audioContextRef.current.state !== "closed") {
         audioContextRef.current.close();
       }
     };
+  }, []);
+
+  // Update effects chain params when audioParams change
+  useEffect(() => {
+    if (effectsChainRef.current) {
+      effectsChainRef.current.setParams(audioParams);
+    }
+  }, [audioParams]);
+
+  // Animation loop for smooth parameter interpolation
+  const updateLoop = useCallback(() => {
+    if (effectsChainRef.current) {
+      effectsChainRef.current.update();
+    }
+    animationRef.current = requestAnimationFrame(updateLoop);
   }, []);
 
   const initAudioContext = () => {
@@ -39,14 +65,28 @@ const TrackPlayer = ({ onAudioInit }: TrackPlayerProps) => {
     const analyser = audioContext.createAnalyser();
     analyser.fftSize = 1024;
 
+    // Create effects chain
+    const effectsChain = new AudioEffectsChain(audioContext);
+    effectsChain.setParams(audioParams);
+
+    // Create source
     const source = audioContext.createMediaElementSource(audioRef.current);
-    source.connect(analyser);
+    sourceRef.current = source;
+
+    // NEW CHAIN: source → effectsChain → analyser → destination
+    // This ensures both output AND analyzer receive processed audio
+    source.connect(effectsChain.getInput());
+    effectsChain.getOutput().connect(analyser);
     analyser.connect(audioContext.destination);
 
     audioContextRef.current = audioContext;
     analyserRef.current = analyser;
+    effectsChainRef.current = effectsChain;
 
-    onAudioInit(audioContext, analyser);
+    // Start the parameter update loop
+    updateLoop();
+
+    onAudioInit(audioContext, analyser, effectsChain);
   };
 
   const playTrack = (track: Track) => {

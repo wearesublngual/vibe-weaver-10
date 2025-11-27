@@ -88,6 +88,44 @@ export interface VisualizerEngine {
   setImage?(imageData: ImageData | HTMLImageElement | HTMLCanvasElement): void;
 }
 
+// Audio effect parameters (psychedelic auditory phenomenology)
+export interface AudioEffectParams {
+  echo: number;   // 0-1: spatiality/room feel
+  drift: number;  // 0-1: tonal expression/movement
+  break_: number; // 0-1: rhythmic texture/disruption
+}
+
+export const DEFAULT_AUDIO_PARAMS: AudioEffectParams = {
+  echo: 0.2,
+  drift: 0.1,
+  break_: 0,
+};
+
+// Audio effect slider configuration
+export interface AudioSliderConfig {
+  key: keyof AudioEffectParams;
+  label: string;
+  description: string;
+}
+
+export const AUDIO_EFFECT_SLIDERS: AudioSliderConfig[] = [
+  {
+    key: 'echo',
+    label: 'ECHO',
+    description: 'Spatiality and room feel'
+  },
+  {
+    key: 'drift',
+    label: 'DRIFT',
+    description: 'Tonal sweeps and movement'
+  },
+  {
+    key: 'break_',
+    label: 'BREAK',
+    description: 'Rhythmic texture and gating'
+  },
+];
+
 // Perceptual zone mapping (nonlinear for better control)
 export function mapToPerceptualZone(linear: number): number {
   if (linear <= 0.4) {
