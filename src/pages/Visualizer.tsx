@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
@@ -8,6 +8,7 @@ import { Link } from "react-router-dom";
 import WebGLCanvas from "@/components/visualizer/WebGLCanvas";
 import TrackPlayer from "@/components/visualizer/TrackPlayer";
 import ImageUpload from "@/components/visualizer/ImageUpload";
+import DebugOverlay from "@/components/visualizer/DebugOverlay";
 import { generateSeed } from "@/lib/seed-generator";
 import { VisualizerParams, DEFAULT_PARAMS, EFFECT_SLIDERS } from "@/visualizers/types";
 
@@ -17,6 +18,7 @@ const Visualizer = () => {
   const [audioContext, setAudioContext] = useState<AudioContext | null>(null);
   const [analyser, setAnalyser] = useState<AnalyserNode | null>(null);
   const [showControls, setShowControls] = useState(true);
+  const [showDebug, setShowDebug] = useState(false);
   const [sourceImage, setSourceImage] = useState<HTMLImageElement | null>(null);
   
   // 6 slider params: dose + 5 effects
@@ -24,6 +26,20 @@ const Visualizer = () => {
 
   useEffect(() => {
     setSeed(generateSeed());
+  }, []);
+
+  // Keyboard shortcut for debug overlay
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'd' || e.key === 'D') {
+        // Don't toggle if typing in an input
+        if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+        setShowDebug(prev => !prev);
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
   const handleAudioInit = (context: AudioContext, analyserNode: AnalyserNode) => {
@@ -58,6 +74,11 @@ const Visualizer = () => {
           imageSource={sourceImage}
         />
       </div>
+
+      {/* Debug Overlay - Press D to toggle */}
+      {showDebug && (
+        <DebugOverlay params={params} analyser={analyser} />
+      )}
 
       {/* UI Overlay */}
       <div className="relative z-10 flex h-full flex-col">
