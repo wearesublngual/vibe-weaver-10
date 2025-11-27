@@ -262,8 +262,10 @@ void main() {
   }
   
   // 2. SYMMETRY - intensity-based blend (no segment count changes)
-  // Fixed 6-fold symmetry, slider controls blend from original to kaleidoscope
-  float symmetryStrength = smoothstep(0.0, 1.0, easedSymmetry * u_dose);
+  // Remapped: effect starts immediately, full range is perceptible
+  // Using pow(x, 0.3) to front-load the curve - small slider values = visible effect
+  float symmetryRaw = easedSymmetry * u_dose;
+  float symmetryStrength = pow(symmetryRaw, 0.3); // Front-loaded curve
   if (symmetryStrength > 0.01) {
     vec2 kCoord = kaleidoscopeFixed(coord, 6.0);
     coord = mix(coord, kCoord, symmetryStrength);
@@ -298,57 +300,59 @@ void main() {
   sampleCoord.y = 1.0 - sampleCoord.y;
   vec3 color = texture(u_image, sampleCoord).rgb;
   
-  // 5. SATURATION - dramatic perceptual color transformation
-  // Clear progression: normal → vivid → shifting → psychedelic
-  float satIntensity = easedSaturation * u_dose;
+  // 5. SATURATION - DRAMATIC perceptual color transformation
+  // Front-loaded curve + aggressive effects
+  float satRaw = easedSaturation * u_dose;
+  float satIntensity = pow(satRaw, 0.4); // Front-load: low slider = visible effect
+  
   if (satIntensity > 0.005) {
     vec3 hsv = rgb2hsv(color);
     
-    // PHASE 1 (0-0.25): Vivid boost - colors pop
-    float vividPhase = smoothstep(0.0, 0.25, satIntensity);
-    hsv.y = hsv.y * (1.0 + vividPhase * 1.2); // Strong saturation boost
+    // PHASE 1 (0-0.2): VIVID - colors POP hard
+    float vividPhase = smoothstep(0.0, 0.2, satIntensity);
+    hsv.y = hsv.y * (1.0 + vividPhase * 2.5); // 2.5x saturation boost
     hsv.y = min(hsv.y, 1.0);
     
-    // PHASE 2 (0.25-0.5): Color separation - distinct bands
-    float separationPhase = smoothstep(0.25, 0.5, satIntensity);
+    // PHASE 2 (0.15-0.4): Color separation - distinct bands
+    float separationPhase = smoothstep(0.15, 0.4, satIntensity);
     if (separationPhase > 0.0) {
-      // Posterize hue into bands
-      float hueBands = 6.0 - separationPhase * 3.0; // 6 bands → 3 bands
+      // Aggressive posterization
+      float hueBands = 8.0 - separationPhase * 5.0; // 8 bands → 3 bands
       float quantizedHue = floor(hsv.x * hueBands + 0.5) / hueBands;
-      hsv.x = mix(hsv.x, quantizedHue, separationPhase * 0.6);
+      hsv.x = mix(hsv.x, quantizedHue, separationPhase * 0.8);
     }
     
-    // PHASE 3 (0.5-0.75): Hue rotation - colors shift continuously
-    float rotationPhase = smoothstep(0.5, 0.75, satIntensity);
+    // PHASE 3 (0.35-0.65): Hue rotation - colors shift continuously
+    float rotationPhase = smoothstep(0.35, 0.65, satIntensity);
     if (rotationPhase > 0.0) {
-      float hueShift = u_time * 0.15 + u_energy * 0.5;
-      hueShift += sin(v_uv.x * 4.0 + v_uv.y * 3.0) * 0.15; // Spatial variation
-      hsv.x = fract(hsv.x + hueShift * rotationPhase * 0.5);
+      float hueShift = u_time * 0.4 + u_energy * 1.5; // Faster rotation
+      hueShift += sin(v_uv.x * 6.0 + v_uv.y * 5.0) * 0.25; // More spatial variation
+      hsv.x = fract(hsv.x + hueShift * rotationPhase);
     }
     
-    // PHASE 4 (0.75-1.0): Psychedelic - rainbow cycling + inversion hints
-    float psychPhase = smoothstep(0.75, 1.0, satIntensity);
+    // PHASE 4 (0.55-1.0): Psychedelic - rainbow cycling + inversion
+    float psychPhase = smoothstep(0.55, 1.0, satIntensity);
     if (psychPhase > 0.0) {
-      // Rainbow cycling based on luminance
-      float lumaHue = hsv.z * 0.8 + u_time * 0.2;
-      hsv.x = fract(mix(hsv.x, lumaHue, psychPhase * 0.7));
+      // Rainbow cycling based on luminance - faster
+      float lumaHue = hsv.z * 1.5 + u_time * 0.5;
+      hsv.x = fract(mix(hsv.x, lumaHue, psychPhase * 0.9));
       
-      // Partial inversion for alien colors
+      // Stronger inversion blend for alien colors
       vec3 inverted = vec3(1.0) - color;
       vec3 invertedHsv = rgb2hsv(inverted);
-      hsv.x = fract(mix(hsv.x, invertedHsv.x, psychPhase * 0.3));
+      hsv.x = fract(mix(hsv.x, invertedHsv.x, psychPhase * 0.5));
       
-      // Push saturation to max
-      hsv.y = mix(hsv.y, 1.0, psychPhase * 0.5);
+      // Max saturation
+      hsv.y = mix(hsv.y, 1.0, psychPhase * 0.8);
     }
     
-    // Contrast boost throughout (stronger effect)
-    float contrast = 1.0 + satIntensity * 0.8;
+    // Strong contrast boost throughout
+    float contrast = 1.0 + satIntensity * 1.5;
     hsv.z = (hsv.z - 0.5) * contrast + 0.5;
     hsv.z = clamp(hsv.z, 0.0, 1.0);
     
-    // Audio reactivity
-    hsv.z *= 1.0 + u_energy * satIntensity * 0.2;
+    // Audio reactivity - stronger
+    hsv.z *= 1.0 + u_energy * satIntensity * 0.4;
     hsv.z = min(hsv.z, 1.0);
     
     color = hsv2rgb(hsv);
