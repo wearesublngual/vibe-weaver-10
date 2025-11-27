@@ -169,8 +169,8 @@ const TrackPlayer = ({ onAudioInit, audioParams = DEFAULT_AUDIO_PARAMS }: TrackP
               size="sm"
               className={`w-full justify-start font-mono text-xs ${
                 currentTrack?.id === track.id
-                  ? "bg-phosphor text-void hover:bg-phosphor/90"
-                  : "border-phosphor/30 hover:border-phosphor hover:bg-card"
+                  ? "bg-phosphor text-void hover:bg-phosphor/90 hover:text-void"
+                  : "border-phosphor/30 text-foreground hover:border-phosphor hover:bg-card hover:text-foreground"
               }`}
             >
               <span className="mr-2 text-signal">{String(track.id).padStart(2, '0')}</span>
