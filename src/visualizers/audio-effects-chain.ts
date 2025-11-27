@@ -193,28 +193,30 @@ export class AudioEffectsChain {
     this._debugValues.echo = { wet: delayWet, feedback, delayTime };
     
     // === DRIFT MAPPING ===
-    // MORE AGGRESSIVE: Lower frequencies, faster LFO, higher Q
+    // Perceptible filter movement but NEVER cuts out completely
     const drift = this.currentParams.drift;
     
-    // Filter frequency: cuts much deeper now
+    // Filter frequency: minimum floor of 3kHz to preserve clarity
+    const minFreq = 3000; // Never go below 3kHz
     const baseFreq = drift < 0.3
-      ? 20000 - drift / 0.3 * 8000  // 20kHz → 12kHz (subtle)
+      ? 20000 - drift / 0.3 * 6000  // 20kHz → 14kHz (subtle warmth)
       : drift < 0.7
-        ? 12000 - (drift - 0.3) / 0.4 * 8000  // 12kHz → 4kHz (noticeable)
-        : 4000 - (drift - 0.7) / 0.3 * 2500;  // 4kHz → 1.5kHz (dramatic)
+        ? 14000 - (drift - 0.3) / 0.4 * 7000  // 14kHz → 7kHz (noticeable color)
+        : Math.max(minFreq, 7000 - (drift - 0.7) / 0.3 * 4000);  // 7kHz → 3kHz (dramatic but safe)
     
-    // LFO depth: more aggressive modulation
+    // LFO depth: scaled to never push below minFreq
+    const maxDepth = (baseFreq - minFreq) * 0.8; // Only modulate 80% of available range
     const lfoDepth = drift < 0.3 
-      ? drift / 0.3 * 2000  // 0-2000Hz modulation
+      ? drift / 0.3 * 1500  // 0-1500Hz modulation
       : drift < 0.7
-        ? 2000 + (drift - 0.3) / 0.4 * 4000  // 2000-6000Hz
-        : 6000 + (drift - 0.7) / 0.3 * 4000; // 6000-10000Hz
+        ? 1500 + (drift - 0.3) / 0.4 * 2000  // 1500-3500Hz
+        : Math.min(maxDepth, 3500 + (drift - 0.7) / 0.3 * 2000); // capped to safe range
     
-    // Q: more resonant
-    const filterQ = 1 + drift * 8; // 1-9 Q (was 1-4)
+    // Q: moderate resonance (too high causes perceived cutout)
+    const filterQ = 1 + drift * 5; // 1-6 Q (reduced from 1-9)
     
-    // LFO speed: MUCH faster
-    const lfoSpeed = 0.2 + drift * 1.8; // 0.2-2.0 Hz (was 0.1-0.5)
+    // LFO speed: expressive but not jarring
+    const lfoSpeed = 0.2 + drift * 1.3; // 0.2-1.5 Hz
     
     this.filterNode.frequency.setTargetAtTime(baseFreq, now, 0.1);
     this.filterNode.Q.setTargetAtTime(filterQ, now, 0.1);
