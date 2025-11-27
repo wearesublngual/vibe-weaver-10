@@ -274,7 +274,10 @@ void main() {
   }
   
   // Sample the uploaded image with transformed coordinates
+  // Flip Y and mirror X to correct orientation
   vec2 sampleCoord = clamp(coord, 0.001, 0.999);
+  sampleCoord.y = 1.0 - sampleCoord.y;  // Flip Y
+  sampleCoord.x = 1.0 - sampleCoord.x;  // Mirror X
   vec3 color = texture(u_image, sampleCoord).rgb;
   
   // 5. SATURATION - color transformation
