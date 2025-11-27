@@ -49,32 +49,32 @@ export const EFFECT_SLIDERS: SliderConfig[] = [
   { 
     key: 'dose', 
     label: 'DOSE', 
-    description: 'Overall transformation intensity'
+    description: 'how many milligrams to take'
   },
   { 
     key: 'symmetry', 
     label: 'SYMMETRY', 
-    description: 'Hyperbolic patterns'
+    description: 'mirrors within mirrors'
   },
   { 
     key: 'recursion', 
     label: 'RECURSION', 
-    description: 'Self-similar fractal depth'
+    description: 'how deep does the rabbit hole go'
   },
   { 
     key: 'breathing', 
     label: 'BREATHING', 
-    description: 'Pulsing oscillation amplitude'
+    description: 'the walls are alive'
   },
   { 
     key: 'flow', 
     label: 'FLOW', 
-    description: 'Directional warping motion'
+    description: 'everything is moving'
   },
   { 
     key: 'saturation', 
     label: 'SATURATION', 
-    description: 'Color intensity and shifting'
+    description: 'colors from another dimension'
   },
 ];
 
@@ -112,17 +112,17 @@ export const AUDIO_EFFECT_SLIDERS: AudioSliderConfig[] = [
   {
     key: 'echo',
     label: 'ECHO',
-    description: 'Spatiality and room feel'
+    description: 'the room remembers everything'
   },
   {
     key: 'drift',
     label: 'DRIFT',
-    description: 'Tonal sweeps and movement'
+    description: 'frequencies finding new paths'
   },
   {
     key: 'break_',
     label: 'BREAK',
-    description: 'Rhythmic texture and gating'
+    description: 'time stutters and skips'
   },
 ];
 

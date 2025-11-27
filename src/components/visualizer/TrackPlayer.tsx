@@ -147,9 +147,9 @@ const TrackPlayer = ({ onAudioInit, audioParams = DEFAULT_AUDIO_PARAMS }: TrackP
           <div className="mb-4 flex items-start gap-2 rounded border border-phosphor/20 bg-void/50 p-3">
             <Music2 className="mt-0.5 h-4 w-4 flex-shrink-0 text-phosphor" />
             <div className="min-w-0 flex-1">
-              <div className="font-mono text-xs text-signal">NOW PLAYING</div>
+              <div className="font-mono text-xs text-signal">CURRENT QUESTION</div>
               <div className="font-mono text-sm text-foreground">
-                Track {currentTrack.id} — {currentTrack.title}
+                Question {currentTrack.id} — {currentTrack.title}
               </div>
             </div>
           </div>
@@ -158,7 +158,7 @@ const TrackPlayer = ({ onAudioInit, audioParams = DEFAULT_AUDIO_PARAMS }: TrackP
 
       <div className="mb-4 space-y-2">
         <div className="font-mono text-xs text-muted-foreground">
-          SELECT TRACK
+          2) SELECT A QUESTION
         </div>
         <div className="space-y-1">
           {tracks.map((track) => (

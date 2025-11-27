@@ -77,6 +77,20 @@ const Visualizer = () => {
         <WebGLCanvas seed={seed} params={params} analyser={analyser} imageSource={sourceImage} />
       </div>
 
+      {/* HUD Edge Text - Left Side */}
+      <div className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 z-20">
+        <div className="writing-vertical font-mono text-[10px] text-phosphor/40 tracking-widest">
+          ▮ sublingual radio · soma · maps for the places we haven't been yet
+        </div>
+      </div>
+
+      {/* HUD Edge Text - Bottom Left */}
+      <div className="pointer-events-none absolute bottom-24 left-4 z-20 space-y-1">
+        <div className="font-mono text-[10px] text-phosphor/40">&gt; listening for future signals_</div>
+        <div className="font-mono text-[10px] text-phosphor/40">&gt; music_as_map :: active</div>
+        <div className="font-mono text-[10px] text-muted-foreground/40">&gt; press H to hide HUD</div>
+      </div>
+
       {/* Debug Overlay - Press D to toggle */}
       {showDebug && <DebugOverlay params={params} analyser={analyser} audioParams={audioParams} effectsChain={effectsChain} />}
 
@@ -147,7 +161,7 @@ const Visualizer = () => {
         }} className="w-80">
               <Card className="border-phosphor/30 bg-card/80 p-6 backdrop-blur-md max-h-[80vh] overflow-y-auto">
                 {/* Visual Controls */}
-                <h3 className="mb-4 font-mono text-sm font-semibold text-foreground">SET YOUR TRIP LEVELS</h3>
+                <h3 className="mb-4 font-mono text-sm font-semibold text-foreground">3) TAKE A TRIP</h3>
 
                 <div className="space-y-4">
                   {/* Dose slider (highlighted) */}
@@ -162,7 +176,7 @@ const Visualizer = () => {
                     </div>
                     <Slider value={[params.dose]} onValueChange={([v]) => updateParam('dose', v)} max={1} step={0.01} className="cursor-pointer" />
                     <p className="mt-1 font-mono text-[10px] text-muted-foreground/60">
-                      ​set how many milligrams to take       
+                      how many milligrams to take
                     </p>
                   </div>
 
