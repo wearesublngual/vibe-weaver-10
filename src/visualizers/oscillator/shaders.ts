@@ -301,16 +301,17 @@ void main() {
   vec3 color = texture(u_image, sampleCoord).rgb;
   
   // 5. SATURATION - balanced perceptual color transformation
-  // Custom curve: bottom 50% of slider = 70% of effect range (more change)
-  //               top 50% of slider = 30% of effect range (slower change)
+  // Asymmetric curve: aggressive at bottom, gentle at top
   float satRaw = easedSaturation * u_dose;
+  // Strong front-load with pow(0.25), then compress top range
+  float frontLoaded = pow(satRaw, 0.25);
+  // Compress the top 30% of output range (0.7-1.0 → slower)
   float satIntensity;
-  if (satRaw < 0.5) {
-    // Bottom half: steep curve (0→0.5 maps to 0→0.7)
-    satIntensity = satRaw * 1.4;
+  if (frontLoaded < 0.7) {
+    satIntensity = frontLoaded;
   } else {
-    // Top half: gentle curve (0.5→1.0 maps to 0.7→1.0)
-    satIntensity = 0.7 + (satRaw - 0.5) * 0.6;
+    // Slow down: 0.7-1.0 input becomes 0.7-1.0 output but stretched
+    satIntensity = 0.7 + (frontLoaded - 0.7) * 0.7;
   }
   
   if (satIntensity > 0.005) {
