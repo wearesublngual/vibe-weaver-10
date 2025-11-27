@@ -2,10 +2,8 @@ import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Hand, Fingerprint, Globe } from "lucide-react";
-
 const Index = () => {
-  return (
-    <div className="relative min-h-screen overflow-hidden bg-void">
+  return <div className="relative min-h-screen overflow-hidden bg-void">
       {/* Scanline effect */}
       <div className="scanline" />
       
@@ -21,12 +19,16 @@ const Index = () => {
       
       <div className="relative z-10 flex min-h-screen flex-col items-center justify-center px-6 py-20">
         {/* SOMA Title - Layered Effect */}
-        <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 1, ease: "easeOut" }}
-          className="mb-8 text-center"
-        >
+        <motion.div initial={{
+        opacity: 0,
+        scale: 0.9
+      }} animate={{
+        opacity: 1,
+        scale: 1
+      }} transition={{
+        duration: 1,
+        ease: "easeOut"
+      }} className="mb-8 text-center">
           <div className="soma-title animate-float">
             {/* Hindi layer behind */}
             <span className="hindi-layer font-hindi select-none" aria-hidden="true">
@@ -38,72 +40,84 @@ const Index = () => {
             </span>
           </div>
           
-          <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.5, duration: 0.8 }}
-            className="mt-4 font-mono text-xs tracking-[0.3em] text-signal uppercase"
-          >
+          <motion.p initial={{
+          opacity: 0
+        }} animate={{
+          opacity: 1
+        }} transition={{
+          delay: 0.5,
+          duration: 0.8
+        }} className="mt-4 font-mono text-xs tracking-[0.3em] text-signal uppercase">
             Visualizer
           </motion.p>
         </motion.div>
 
         {/* Main content */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, delay: 0.3 }}
-          className="max-w-2xl text-center"
-        >
+        <motion.div initial={{
+        opacity: 0,
+        y: 20
+      }} animate={{
+        opacity: 1,
+        y: 0
+      }} transition={{
+        duration: 0.8,
+        delay: 0.3
+      }} className="max-w-2xl text-center">
           <h2 className="mb-4 text-2xl font-light tracking-tight md:text-3xl text-foreground/90">
             Maps for Places We Haven't Been Yet
           </h2>
 
-          <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.8, delay: 0.5 }}
-            className="mb-6 text-base text-muted-foreground md:text-lg italic"
-          >
+          <motion.p initial={{
+          opacity: 0
+        }} animate={{
+          opacity: 1
+        }} transition={{
+          duration: 0.8,
+          delay: 0.5
+        }} className="mb-6 text-base text-muted-foreground md:text-lg italic">
             A Psychedelic Trip Simulator
             <br />
             <span className="text-foreground/60">(For People Who Still Have Day Jobs)</span>
           </motion.p>
 
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.8, delay: 0.7 }}
-            className="mb-6 text-sm text-muted-foreground leading-relaxed max-w-xl mx-auto"
-          >
-            <p className="mb-4">
-              The official album visualizer for <span className="text-phosphor font-medium">SOMA</span> —
+          <motion.div initial={{
+          opacity: 0
+        }} animate={{
+          opacity: 1
+        }} transition={{
+          duration: 0.8,
+          delay: 0.7
+        }} className="mb-6 text-sm text-muted-foreground leading-relaxed max-w-xl mx-auto">
+            <p className="mb-4">The official album visualizer for SOMA — and a low-stakes, browser-based psychedelic experience simulator inspired by research from Harvard's Science of Psychedelics and the Qualia Research Institute.<span className="text-phosphor font-medium">SOMA</span> —
               and, unintentionally (but also very intentionally),
               a low-stakes, browser-based psychedelic experience simulator
               inspired by research from Harvard's Science of Psychedelics
               and the Qualia Research Institute.
             </p>
-            <p className="font-mono text-xs text-signal/70 leading-loose">
-              All of the perceptual weirdness.
-              <br />
+            <p className="font-mono text-xs text-signal/70 leading-loose">All of the perceptual weirdness.
+None of the identity dissolution.
+⚠️ SEIZURE WARNING: Contains intense visual patterns, flickers, and rapid motion. View with caution.<br />
               None of the identity dissolution.
+
+
               <br />
               Zero awkward "So… how are you feeling?" phone calls the morning after.
             </p>
           </motion.div>
 
           {/* CTA Button */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 0.9 }}
-            className="mb-16"
-          >
+          <motion.div initial={{
+          opacity: 0,
+          y: 20
+        }} animate={{
+          opacity: 1,
+          y: 0
+        }} transition={{
+          duration: 0.8,
+          delay: 0.9
+        }} className="mb-16">
             <Link to="/visualizer">
-              <Button
-                size="lg"
-                className="group relative overflow-hidden bg-phosphor font-mono text-base font-semibold text-primary-foreground shadow-glow-phosphor transition-all hover:shadow-glow-electric hover:bg-electric"
-              >
+              <Button size="lg" className="group relative overflow-hidden bg-phosphor font-mono text-base font-semibold text-primary-foreground shadow-glow-phosphor transition-all hover:shadow-glow-electric hover:bg-electric">
                 <span className="relative z-10 flex items-center gap-2">
                   Launch the Visualizer
                   <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
@@ -115,12 +129,16 @@ const Index = () => {
         </motion.div>
 
         {/* Features */}
-        <motion.div
-          initial={{ opacity: 0, y: 40 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, delay: 1.1 }}
-          className="grid max-w-5xl gap-4 md:grid-cols-2 lg:grid-cols-4"
-        >
+        <motion.div initial={{
+        opacity: 0,
+        y: 40
+      }} animate={{
+        opacity: 1,
+        y: 0
+      }} transition={{
+        duration: 0.8,
+        delay: 1.1
+      }} className="grid max-w-5xl gap-4 md:grid-cols-2 lg:grid-cols-4">
           <div className="group rounded-lg border border-phosphor/20 bg-card/40 p-5 backdrop-blur-sm transition-all hover:border-phosphor/50 hover:bg-card/60">
             <div className="mb-3 text-2xl">🌀</div>
             <h3 className="mb-2 font-mono text-xs font-semibold text-foreground uppercase tracking-wider">
@@ -167,19 +185,19 @@ const Index = () => {
         </motion.div>
 
         {/* Footer */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.8, delay: 1.3 }}
-          className="mt-16 text-center"
-        >
+        <motion.div initial={{
+        opacity: 0
+      }} animate={{
+        opacity: 1
+      }} transition={{
+        duration: 0.8,
+        delay: 1.3
+      }} className="mt-16 text-center">
           <p className="font-mono text-xs text-muted-foreground/60">
             SUBLINGUAL RECORDS // ALBUM ZERO
           </p>
         </motion.div>
       </div>
-    </div>
-  );
+    </div>;
 };
-
 export default Index;
