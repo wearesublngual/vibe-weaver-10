@@ -179,9 +179,14 @@ vec2 kaleidoscope(vec2 uv, float segments) {
   float angle = atan(centered.y, centered.x);
   float r = length(centered);
   float segmentAngle = TAU / segments;
+  // Shift angle to avoid seam at atan discontinuity
+  angle = angle + PI;
   angle = mod(angle, segmentAngle);
-  angle = abs(angle - segmentAngle * 0.5);
-  return vec2(cos(angle), sin(angle)) * r + 0.5;
+  // Mirror fold with smooth transition
+  float foldedAngle = abs(angle - segmentAngle * 0.5);
+  // Shift back
+  foldedAngle = foldedAngle - PI / segments;
+  return vec2(cos(foldedAngle), sin(foldedAngle)) * r + 0.5;
 }
 
 vec3 rgb2hsv(vec3 c) {
