@@ -12,9 +12,10 @@ interface WebGLCanvasProps {
   seed: string;
   params: VisualizerParams;
   analyser: AnalyserNode | null;
+  imageSource?: HTMLImageElement | null;
 }
 
-const WebGLCanvas = ({ seed, params, analyser }: WebGLCanvasProps) => {
+const WebGLCanvas = ({ seed, params, analyser, imageSource }: WebGLCanvasProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<OscillatorEngine | null>(null);
   const audioAnalyzerRef = useRef<AudioAnalyzer>(new AudioAnalyzer());
@@ -38,6 +39,13 @@ const WebGLCanvas = ({ seed, params, analyser }: WebGLCanvasProps) => {
       engineRef.current.setSeed(seed);
     }
   }, [seed]);
+  
+  // Update image source when it changes
+  useEffect(() => {
+    if (engineRef.current && imageSource) {
+      engineRef.current.setImage(imageSource);
+    }
+  }, [imageSource]);
   
   // Animation loop
   const animate = useCallback((currentTime: number) => {
@@ -68,7 +76,7 @@ const WebGLCanvas = ({ seed, params, analyser }: WebGLCanvasProps) => {
     // Set canvas size
     const updateSize = () => {
       const rect = canvas.getBoundingClientRect();
-      const dpr = Math.min(window.devicePixelRatio, 2); // Cap DPR for performance
+      const dpr = Math.min(window.devicePixelRatio, 2);
       canvas.width = rect.width * dpr;
       canvas.height = rect.height * dpr;
     };
@@ -83,6 +91,10 @@ const WebGLCanvas = ({ seed, params, analyser }: WebGLCanvasProps) => {
     engine.init(canvas)
       .then(() => {
         console.log('Visualizer engine ready');
+        // If we already have an image, set it
+        if (imageSource) {
+          engine.setImage(imageSource);
+        }
         // Start animation loop
         animationRef.current = requestAnimationFrame(animate);
       })

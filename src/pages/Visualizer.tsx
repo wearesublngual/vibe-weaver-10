@@ -7,6 +7,7 @@ import { ArrowLeft, RotateCcw, Settings2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import WebGLCanvas from "@/components/visualizer/WebGLCanvas";
 import TrackPlayer from "@/components/visualizer/TrackPlayer";
+import ImageUpload from "@/components/visualizer/ImageUpload";
 import { generateSeed } from "@/lib/seed-generator";
 import { VisualizerParams, DEFAULT_PARAMS, EFFECT_SLIDERS } from "@/visualizers/types";
 
@@ -16,12 +17,12 @@ const Visualizer = () => {
   const [audioContext, setAudioContext] = useState<AudioContext | null>(null);
   const [analyser, setAnalyser] = useState<AnalyserNode | null>(null);
   const [showControls, setShowControls] = useState(true);
+  const [sourceImage, setSourceImage] = useState<HTMLImageElement | null>(null);
   
   // 6 slider params: dose + 5 effects
   const [params, setParams] = useState<VisualizerParams>(DEFAULT_PARAMS);
 
   useEffect(() => {
-    // Generate initial seed
     setSeed(generateSeed());
   }, []);
 
@@ -29,6 +30,10 @@ const Visualizer = () => {
     setAudioContext(context);
     setAnalyser(analyserNode);
     setIsPlaying(true);
+  };
+
+  const handleImageLoad = (image: HTMLImageElement) => {
+    setSourceImage(image);
   };
 
   const handleReset = () => {
@@ -42,7 +47,6 @@ const Visualizer = () => {
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-void">
-      {/* Scanline effect */}
       <div className="scanline" />
 
       {/* WebGL Canvas - Full screen background */}
@@ -51,6 +55,7 @@ const Visualizer = () => {
           seed={seed}
           params={params}
           analyser={analyser}
+          imageSource={sourceImage}
         />
       </div>
 
@@ -94,13 +99,22 @@ const Visualizer = () => {
 
         {/* Main Content Area */}
         <div className="flex flex-1 items-end justify-between gap-6 p-6">
-          {/* Left: Track Player */}
+          {/* Left: Track Player + Image Upload */}
           <motion.div
             initial={{ x: -100, opacity: 0 }}
             animate={{ x: 0, opacity: 1 }}
             transition={{ duration: 0.5, delay: 0.2 }}
-            className="w-96"
+            className="flex w-96 flex-col gap-4"
           >
+            {/* Image Upload */}
+            <Card className="border-phosphor/30 bg-card/80 p-4 backdrop-blur-md">
+              <ImageUpload 
+                onImageLoad={handleImageLoad}
+                currentImage={sourceImage}
+              />
+            </Card>
+            
+            {/* Track Player */}
             <TrackPlayer onAudioInit={handleAudioInit} />
           </motion.div>
 
@@ -112,7 +126,7 @@ const Visualizer = () => {
               transition={{ duration: 0.5, delay: 0.2 }}
               className="w-80"
             >
-              <Card className="border-phosphor/30 bg-card/80 p-6 backdrop-blur-md">
+              <Card className="border-phosphor/30 bg-card/80 p-6 backdrop-blur-md max-h-[70vh] overflow-y-auto">
                 <h3 className="mb-4 font-mono text-sm font-semibold text-foreground">
                   PERCEPTUAL ENGINE
                 </h3>
@@ -199,7 +213,7 @@ const Visualizer = () => {
               SUBLINGUAL RECORDS // SOMA // PERCEPTUAL ENGINE
             </p>
             <p className="font-mono text-xs text-signal">
-              {isPlaying ? "AUDIO STREAM ACTIVE" : "AWAITING AUDIO INPUT"}
+              {sourceImage ? "IMAGE LOADED" : "NO IMAGE"} • {isPlaying ? "AUDIO ACTIVE" : "AWAITING AUDIO"}
             </p>
           </div>
         </motion.div>
