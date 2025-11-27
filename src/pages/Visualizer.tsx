@@ -8,17 +8,7 @@ import { Link } from "react-router-dom";
 import WebGLCanvas from "@/components/visualizer/WebGLCanvas";
 import TrackPlayer from "@/components/visualizer/TrackPlayer";
 import { generateSeed } from "@/lib/seed-generator";
-import { VisualizerParams, DEFAULT_PARAMS } from "@/visualizers/types";
-
-// Slider configuration with poetic names and descriptions
-const SLIDERS = [
-  { key: 'depth', name: 'DEPTH', description: 'Density of the field' },
-  { key: 'curvature', name: 'CURVATURE', description: 'Spatial warping' },
-  { key: 'turbulence', name: 'TURBULENCE', description: 'Order to chaos' },
-  { key: 'branching', name: 'BRANCHING', description: 'Pattern multiplication' },
-  { key: 'persistence', name: 'PERSISTENCE', description: 'Echo trails' },
-  { key: 'focus', name: 'FOCUS', description: 'Center attention' },
-] as const;
+import { VisualizerParams, DEFAULT_PARAMS, EFFECT_SLIDERS } from "@/visualizers/types";
 
 const Visualizer = () => {
   const [isPlaying, setIsPlaying] = useState(false);
@@ -27,7 +17,7 @@ const Visualizer = () => {
   const [analyser, setAnalyser] = useState<AnalyserNode | null>(null);
   const [showControls, setShowControls] = useState(true);
   
-  // 6 slider params
+  // 6 slider params: dose + 5 effects
   const [params, setParams] = useState<VisualizerParams>(DEFAULT_PARAMS);
 
   useEffect(() => {
@@ -128,12 +118,34 @@ const Visualizer = () => {
                 </h3>
 
                 <div className="space-y-4">
-                  {/* 6 Visual Sliders */}
-                  {SLIDERS.map((slider) => (
+                  {/* Dose slider (highlighted) */}
+                  <div className="border-b border-phosphor/20 pb-4">
+                    <div className="mb-2 flex items-center justify-between">
+                      <label className="font-mono text-xs font-bold text-phosphor">
+                        DOSE
+                      </label>
+                      <span className="font-mono text-xs text-signal">
+                        {(params.dose * 100).toFixed(0)}%
+                      </span>
+                    </div>
+                    <Slider
+                      value={[params.dose]}
+                      onValueChange={([v]) => updateParam('dose', v)}
+                      max={1}
+                      step={0.01}
+                      className="cursor-pointer"
+                    />
+                    <p className="mt-1 font-mono text-[10px] text-muted-foreground/60">
+                      Overall transformation intensity
+                    </p>
+                  </div>
+
+                  {/* 5 Effect Sliders */}
+                  {EFFECT_SLIDERS.filter(s => s.key !== 'dose').map((slider) => (
                     <div key={slider.key}>
                       <div className="mb-2 flex items-center justify-between">
                         <label className="font-mono text-xs text-muted-foreground">
-                          {slider.name}
+                          {slider.label}
                         </label>
                         <span className="font-mono text-xs text-signal">
                           {(params[slider.key] * 100).toFixed(0)}%
@@ -184,7 +196,7 @@ const Visualizer = () => {
         >
           <div className="flex items-center justify-between">
             <p className="font-mono text-xs text-muted-foreground">
-              SUBLINGUAL RECORDS // SOMA // COUPLED OSCILLATOR ENGINE
+              SUBLINGUAL RECORDS // SOMA // PERCEPTUAL ENGINE
             </p>
             <p className="font-mono text-xs text-signal">
               {isPlaying ? "AUDIO STREAM ACTIVE" : "AWAITING AUDIO INPUT"}
