@@ -1,10 +1,13 @@
 import { useEffect, useState, useRef } from "react";
-import { VisualizerParams } from "@/visualizers/types";
+import { VisualizerParams, AudioEffectParams, DEFAULT_AUDIO_PARAMS } from "@/visualizers/types";
 import { AudioAnalyzer } from "@/visualizers/audio-analyzer";
+import { AudioEffectsChain } from "@/visualizers/audio-effects-chain";
 
 interface DebugOverlayProps {
   params: VisualizerParams;
   analyser: AnalyserNode | null;
+  audioParams?: AudioEffectParams;
+  effectsChain?: AudioEffectsChain | null;
 }
 
 // Easing functions (match shader)
@@ -71,7 +74,7 @@ const MiniCurve = ({ fn, currentX }: { fn: (x: number) => number; currentX: numb
   );
 };
 
-const DebugOverlay = ({ params, analyser }: DebugOverlayProps) => {
+const DebugOverlay = ({ params, analyser, audioParams = DEFAULT_AUDIO_PARAMS, effectsChain }: DebugOverlayProps) => {
   const [audioData, setAudioData] = useState({
     bass: 0, lowMid: 0, mid: 0, high: 0, energy: 0, beatIntensity: 0
   });
@@ -209,9 +212,31 @@ const DebugOverlay = ({ params, analyser }: DebugOverlayProps) => {
         </div>
       </div>
       
+      {/* Audio Effects */}
+      <div className="mb-4 border-t border-phosphor/20 pt-3">
+        <div className="text-muted-foreground mb-2 font-semibold">AUDIO EFFECTS</div>
+        <div className="grid grid-cols-3 gap-2">
+          <div className="border border-phosphor/10 rounded p-2 bg-void/30">
+            <div className="text-muted-foreground text-[9px]">ECHO</div>
+            <div className="text-signal">{(audioParams.echo * 100).toFixed(0)}%</div>
+            <MiniBar value={audioParams.echo} color="bg-blue-500" />
+          </div>
+          <div className="border border-phosphor/10 rounded p-2 bg-void/30">
+            <div className="text-muted-foreground text-[9px]">DRIFT</div>
+            <div className="text-signal">{(audioParams.drift * 100).toFixed(0)}%</div>
+            <MiniBar value={audioParams.drift} color="bg-emerald-500" />
+          </div>
+          <div className="border border-phosphor/10 rounded p-2 bg-void/30">
+            <div className="text-muted-foreground text-[9px]">BREAK</div>
+            <div className="text-signal">{(audioParams.break_ * 100).toFixed(0)}%</div>
+            <MiniBar value={audioParams.break_} color="bg-amber-500" />
+          </div>
+        </div>
+      </div>
+      
       {/* Slider Values */}
       <div className="border-t border-phosphor/20 pt-3">
-        <div className="text-muted-foreground mb-2 font-semibold">SLIDER CURVES</div>
+        <div className="text-muted-foreground mb-2 font-semibold">VISUAL SLIDER CURVES</div>
         <div className="space-y-2">
           {sliderData.map(({ key, raw, eased, effective, curveName, curve, zone }) => (
             <div key={key} className="border border-phosphor/10 rounded p-2 bg-void/30">

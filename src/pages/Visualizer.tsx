@@ -10,19 +10,24 @@ import TrackPlayer from "@/components/visualizer/TrackPlayer";
 import ImageUpload from "@/components/visualizer/ImageUpload";
 import DebugOverlay from "@/components/visualizer/DebugOverlay";
 import { generateSeed } from "@/lib/seed-generator";
-import { VisualizerParams, DEFAULT_PARAMS, EFFECT_SLIDERS } from "@/visualizers/types";
+import { VisualizerParams, DEFAULT_PARAMS, EFFECT_SLIDERS, AudioEffectParams, DEFAULT_AUDIO_PARAMS, AUDIO_EFFECT_SLIDERS } from "@/visualizers/types";
+import { AudioEffectsChain } from "@/visualizers/audio-effects-chain";
 
 const Visualizer = () => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [seed, setSeed] = useState<string>("");
   const [audioContext, setAudioContext] = useState<AudioContext | null>(null);
   const [analyser, setAnalyser] = useState<AnalyserNode | null>(null);
+  const [effectsChain, setEffectsChain] = useState<AudioEffectsChain | null>(null);
   const [showControls, setShowControls] = useState(true);
   const [showDebug, setShowDebug] = useState(false);
   const [sourceImage, setSourceImage] = useState<HTMLImageElement | null>(null);
   
-  // 6 slider params: dose + 5 effects
+  // Visual params: dose + 5 effects
   const [params, setParams] = useState<VisualizerParams>(DEFAULT_PARAMS);
+  
+  // Audio effect params: echo, drift, break
+  const [audioParams, setAudioParams] = useState<AudioEffectParams>(DEFAULT_AUDIO_PARAMS);
 
   useEffect(() => {
     setSeed(generateSeed());
@@ -42,9 +47,10 @@ const Visualizer = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  const handleAudioInit = (context: AudioContext, analyserNode: AnalyserNode) => {
+  const handleAudioInit = (context: AudioContext, analyserNode: AnalyserNode, chain: AudioEffectsChain) => {
     setAudioContext(context);
     setAnalyser(analyserNode);
+    setEffectsChain(chain);
     setIsPlaying(true);
   };
 
@@ -55,10 +61,15 @@ const Visualizer = () => {
   const handleReset = () => {
     setSeed(generateSeed());
     setParams(DEFAULT_PARAMS);
+    setAudioParams(DEFAULT_AUDIO_PARAMS);
   };
 
   const updateParam = (key: keyof VisualizerParams, value: number) => {
     setParams(prev => ({ ...prev, [key]: value }));
+  };
+
+  const updateAudioParam = (key: keyof AudioEffectParams, value: number) => {
+    setAudioParams(prev => ({ ...prev, [key]: value }));
   };
 
   return (
@@ -77,7 +88,12 @@ const Visualizer = () => {
 
       {/* Debug Overlay - Press D to toggle */}
       {showDebug && (
-        <DebugOverlay params={params} analyser={analyser} />
+        <DebugOverlay 
+          params={params} 
+          analyser={analyser} 
+          audioParams={audioParams}
+          effectsChain={effectsChain}
+        />
       )}
 
       {/* UI Overlay */}
@@ -136,7 +152,10 @@ const Visualizer = () => {
             </Card>
             
             {/* Track Player */}
-            <TrackPlayer onAudioInit={handleAudioInit} />
+            <TrackPlayer 
+              onAudioInit={handleAudioInit} 
+              audioParams={audioParams}
+            />
           </motion.div>
 
           {/* Right: Controls Panel */}
@@ -147,7 +166,8 @@ const Visualizer = () => {
               transition={{ duration: 0.5, delay: 0.2 }}
               className="w-80"
             >
-              <Card className="border-phosphor/30 bg-card/80 p-6 backdrop-blur-md max-h-[70vh] overflow-y-auto">
+              <Card className="border-phosphor/30 bg-card/80 p-6 backdrop-blur-md max-h-[80vh] overflow-y-auto">
+                {/* Visual Controls */}
                 <h3 className="mb-4 font-mono text-sm font-semibold text-foreground">
                   PERCEPTUAL ENGINE
                 </h3>
@@ -198,24 +218,57 @@ const Visualizer = () => {
                       </p>
                     </div>
                   ))}
+                </div>
 
-                  <div className="border-t border-phosphor/20 pt-4">
-                    <div className="mb-2 font-mono text-xs text-muted-foreground">
-                      SESSION SEED
-                    </div>
-                    <div className="mb-3 rounded border border-phosphor/20 bg-void/50 p-2 font-mono text-sm text-phosphor">
-                      {seed}
-                    </div>
-                    <Button
-                      onClick={handleReset}
-                      variant="outline"
-                      size="sm"
-                      className="w-full border-phosphor/30 font-mono hover:border-phosphor hover:bg-card"
-                    >
-                      <RotateCcw className="mr-2 h-4 w-4" />
-                      New Seed
-                    </Button>
+                {/* Audio Effects Section */}
+                <div className="mt-6 border-t border-phosphor/20 pt-4">
+                  <h3 className="mb-4 font-mono text-sm font-semibold text-foreground">
+                    AUDITORY ENGINE
+                  </h3>
+                  
+                  <div className="space-y-4">
+                    {AUDIO_EFFECT_SLIDERS.map((slider) => (
+                      <div key={slider.key}>
+                        <div className="mb-2 flex items-center justify-between">
+                          <label className="font-mono text-xs text-muted-foreground">
+                            {slider.label}
+                          </label>
+                          <span className="font-mono text-xs text-signal">
+                            {(audioParams[slider.key] * 100).toFixed(0)}%
+                          </span>
+                        </div>
+                        <Slider
+                          value={[audioParams[slider.key]]}
+                          onValueChange={([v]) => updateAudioParam(slider.key, v)}
+                          max={1}
+                          step={0.01}
+                          className="cursor-pointer"
+                        />
+                        <p className="mt-1 font-mono text-[10px] text-muted-foreground/60">
+                          {slider.description}
+                        </p>
+                      </div>
+                    ))}
                   </div>
+                </div>
+
+                {/* Session Seed */}
+                <div className="mt-6 border-t border-phosphor/20 pt-4">
+                  <div className="mb-2 font-mono text-xs text-muted-foreground">
+                    SESSION SEED
+                  </div>
+                  <div className="mb-3 rounded border border-phosphor/20 bg-void/50 p-2 font-mono text-sm text-phosphor">
+                    {seed}
+                  </div>
+                  <Button
+                    onClick={handleReset}
+                    variant="outline"
+                    size="sm"
+                    className="w-full border-phosphor/30 font-mono hover:border-phosphor hover:bg-card"
+                  >
+                    <RotateCcw className="mr-2 h-4 w-4" />
+                    Reset All
+                  </Button>
                 </div>
               </Card>
             </motion.div>
@@ -234,7 +287,7 @@ const Visualizer = () => {
               SUBLINGUAL RECORDS // SOMA // PERCEPTUAL ENGINE
             </p>
             <p className="font-mono text-xs text-signal">
-              {sourceImage ? "IMAGE LOADED" : "NO IMAGE"} • {isPlaying ? "AUDIO ACTIVE" : "AWAITING AUDIO"}
+              {sourceImage ? "IMAGE LOADED" : "NO IMAGE"} • {isPlaying ? "AUDIO ACTIVE" : "AWAITING AUDIO"} • Press D for debug
             </p>
           </div>
         </motion.div>
