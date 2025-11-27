@@ -5,9 +5,20 @@ import { Slider } from "@/components/ui/slider";
 import { Card } from "@/components/ui/card";
 import { ArrowLeft, RotateCcw, Settings2 } from "lucide-react";
 import { Link } from "react-router-dom";
-import HydraCanvas from "@/components/visualizer/HydraCanvas";
+import WebGLCanvas from "@/components/visualizer/WebGLCanvas";
 import TrackPlayer from "@/components/visualizer/TrackPlayer";
 import { generateSeed } from "@/lib/seed-generator";
+import { VisualizerParams, DEFAULT_PARAMS } from "@/visualizers/types";
+
+// Slider configuration with poetic names and descriptions
+const SLIDERS = [
+  { key: 'depth', name: 'DEPTH', description: 'Density of the field' },
+  { key: 'curvature', name: 'CURVATURE', description: 'Spatial warping' },
+  { key: 'turbulence', name: 'TURBULENCE', description: 'Order to chaos' },
+  { key: 'branching', name: 'BRANCHING', description: 'Pattern multiplication' },
+  { key: 'persistence', name: 'PERSISTENCE', description: 'Echo trails' },
+  { key: 'focus', name: 'FOCUS', description: 'Center attention' },
+] as const;
 
 const Visualizer = () => {
   const [isPlaying, setIsPlaying] = useState(false);
@@ -15,10 +26,9 @@ const Visualizer = () => {
   const [audioContext, setAudioContext] = useState<AudioContext | null>(null);
   const [analyser, setAnalyser] = useState<AnalyserNode | null>(null);
   const [showControls, setShowControls] = useState(true);
-  const [mode, setMode] = useState(1);
-  const [seafloor, setSeafloor] = useState([0.5]);
-  const [storm, setStorm] = useState([0.5]);
-  const [beacon, setBeacon] = useState([0.5]);
+  
+  // 6 slider params
+  const [params, setParams] = useState<VisualizerParams>(DEFAULT_PARAMS);
 
   useEffect(() => {
     // Generate initial seed
@@ -33,10 +43,11 @@ const Visualizer = () => {
 
   const handleReset = () => {
     setSeed(generateSeed());
-    setMode(1);
-    setSeafloor([0.5]);
-    setStorm([0.5]);
-    setBeacon([0.5]);
+    setParams(DEFAULT_PARAMS);
+  };
+
+  const updateParam = (key: keyof VisualizerParams, value: number) => {
+    setParams(prev => ({ ...prev, [key]: value }));
   };
 
   return (
@@ -44,14 +55,11 @@ const Visualizer = () => {
       {/* Scanline effect */}
       <div className="scanline" />
 
-      {/* Hydra Canvas - Full screen background */}
+      {/* WebGL Canvas - Full screen background */}
       <div className="absolute inset-0">
-        <HydraCanvas
+        <WebGLCanvas
           seed={seed}
-          mode={mode}
-          seafloor={seafloor[0]}
-          storm={storm[0]}
-          beacon={beacon[0]}
+          params={params}
           analyser={analyser}
         />
       </div>
@@ -79,7 +87,7 @@ const Visualizer = () => {
           <div className="flex items-center gap-2">
             <div className="flex h-2 w-2 animate-pulse rounded-full bg-phosphor shadow-glow-phosphor" />
             <span className="font-mono text-sm text-signal">
-              TRANSMISSION ACTIVE
+              {isPlaying ? "TRANSMISSION ACTIVE" : "AWAITING SIGNAL"}
             </span>
           </div>
 
@@ -116,100 +124,33 @@ const Visualizer = () => {
             >
               <Card className="border-phosphor/30 bg-card/80 p-6 backdrop-blur-md">
                 <h3 className="mb-4 font-mono text-sm font-semibold text-foreground">
-                  REALITY MODULATION
+                  PERCEPTUAL ENGINE
                 </h3>
 
-                <div className="space-y-6">
-                  {/* Visual Mode Selection */}
-                  <div>
-                    <div className="mb-2 font-mono text-xs text-muted-foreground">
-                      VISUAL MODE
-                    </div>
-                    <div className="grid grid-cols-3 gap-2">
-                      {[
-                        { id: 1, name: "Portal" },
-                        { id: 2, name: "Drift" },
-                        { id: 3, name: "Bloom" },
-                        { id: 4, name: "Scanner" },
-                        { id: 5, name: "Ritual" },
-                        { id: 6, name: "Tide" },
-                      ].map((m) => (
-                        <Button
-                          key={m.id}
-                          onClick={() => setMode(m.id)}
-                          variant={mode === m.id ? "default" : "outline"}
-                          size="sm"
-                          className={`font-mono text-xs ${
-                            mode === m.id
-                              ? "bg-phosphor text-void hover:bg-phosphor/90"
-                              : "border-phosphor/30 hover:border-phosphor hover:bg-card"
-                          }`}
-                        >
-                          {m.name}
-                        </Button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="border-t border-phosphor/20 pt-4">
-                    <div className="mb-3 font-mono text-xs text-muted-foreground">
-                      ALTER THE MAP
-                    </div>
-
-                    <div>
+                <div className="space-y-4">
+                  {/* 6 Visual Sliders */}
+                  {SLIDERS.map((slider) => (
+                    <div key={slider.key}>
                       <div className="mb-2 flex items-center justify-between">
                         <label className="font-mono text-xs text-muted-foreground">
-                          SEAFLOOR
+                          {slider.name}
                         </label>
                         <span className="font-mono text-xs text-signal">
-                          {(seafloor[0] * 100).toFixed(0)}%
+                          {(params[slider.key] * 100).toFixed(0)}%
                         </span>
                       </div>
                       <Slider
-                        value={seafloor}
-                        onValueChange={setSeafloor}
+                        value={[params[slider.key]]}
+                        onValueChange={([v]) => updateParam(slider.key, v)}
                         max={1}
                         step={0.01}
                         className="cursor-pointer"
                       />
+                      <p className="mt-1 font-mono text-[10px] text-muted-foreground/60">
+                        {slider.description}
+                      </p>
                     </div>
-
-                    <div className="mt-4">
-                      <div className="mb-2 flex items-center justify-between">
-                        <label className="font-mono text-xs text-muted-foreground">
-                          STORM
-                        </label>
-                        <span className="font-mono text-xs text-signal">
-                          {(storm[0] * 100).toFixed(0)}%
-                        </span>
-                      </div>
-                      <Slider
-                        value={storm}
-                        onValueChange={setStorm}
-                        max={1}
-                        step={0.01}
-                        className="cursor-pointer"
-                      />
-                    </div>
-
-                    <div className="mt-4">
-                      <div className="mb-2 flex items-center justify-between">
-                        <label className="font-mono text-xs text-muted-foreground">
-                          BEACON
-                        </label>
-                        <span className="font-mono text-xs text-signal">
-                          {(beacon[0] * 100).toFixed(0)}%
-                        </span>
-                      </div>
-                      <Slider
-                        value={beacon}
-                        onValueChange={setBeacon}
-                        max={1}
-                        step={0.01}
-                        className="cursor-pointer"
-                      />
-                    </div>
-                  </div>
+                  ))}
 
                   <div className="border-t border-phosphor/20 pt-4">
                     <div className="mb-2 font-mono text-xs text-muted-foreground">
@@ -243,7 +184,7 @@ const Visualizer = () => {
         >
           <div className="flex items-center justify-between">
             <p className="font-mono text-xs text-muted-foreground">
-              SUBLINGUAL RECORDS // SOMA // ALBUM ZERO
+              SUBLINGUAL RECORDS // SOMA // COUPLED OSCILLATOR ENGINE
             </p>
             <p className="font-mono text-xs text-signal">
               {isPlaying ? "AUDIO STREAM ACTIVE" : "AWAITING AUDIO INPUT"}
