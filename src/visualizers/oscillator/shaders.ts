@@ -182,14 +182,31 @@ vec2 logPolar(vec2 uv, float intensity) {
   return mix(uv, vec2(theta / TAU + 0.5, logR), intensity);
 }
 
-vec2 kaleidoscope(vec2 uv, float segments) {
+// Smooth kaleidoscope with fractional segment blending
+vec2 kaleidoscopeSmooth(vec2 uv, float segments, out float blendFactor) {
   vec2 centered = uv - 0.5;
   float angle = atan(centered.y, centered.x);
   float r = length(centered);
-  float segmentAngle = TAU / segments;
-  angle = mod(angle, segmentAngle);
-  angle = abs(angle - segmentAngle * 0.5);
-  return vec2(cos(angle), sin(angle)) * r + 0.5;
+  
+  // Get integer and fractional parts for smooth blending
+  float segFloor = floor(segments);
+  float segCeil = ceil(segments);
+  blendFactor = fract(segments);
+  
+  // Calculate both kaleidoscope results
+  float segAngle1 = TAU / max(segFloor, 2.0);
+  float segAngle2 = TAU / max(segCeil, 3.0);
+  
+  float angle1 = mod(angle, segAngle1);
+  angle1 = abs(angle1 - segAngle1 * 0.5);
+  
+  float angle2 = mod(angle, segAngle2);
+  angle2 = abs(angle2 - segAngle2 * 0.5);
+  
+  // Smooth blend between segment counts
+  float blendedAngle = mix(angle1, angle2, smoothstep(0.0, 1.0, blendFactor));
+  
+  return vec2(cos(blendedAngle), sin(blendedAngle)) * r + 0.5;
 }
 
 vec3 rgb2hsv(vec3 c) {
@@ -260,11 +277,13 @@ void main() {
     coord = logPolar(coord, recursionIntensity);
   }
   
-  // 2. SYMMETRY - kaleidoscope (smoother segment transitions)
+  // 2. SYMMETRY - kaleidoscope (smooth fractional segment blending)
+  // Zoomed range: 2.5 to 8 segments for smoother transitions
   float symmetryStrength = easedSymmetry * u_dose;
-  float segments = 3.0 + symmetryStrength * 12.0;
-  if (symmetryStrength > 0.05) {
-    coord = kaleidoscope(coord, segments);
+  float segments = 2.5 + symmetryStrength * 5.5;
+  if (symmetryStrength > 0.02) {
+    float blendFactor;
+    coord = kaleidoscopeSmooth(coord, segments, blendFactor);
   }
   
   // 3. BREATHING - radial pulsing (audio-reactive)
@@ -296,27 +315,60 @@ void main() {
   sampleCoord.y = 1.0 - sampleCoord.y;
   vec3 color = texture(u_image, sampleCoord).rgb;
   
-  // 5. SATURATION - color transformation (fixed highlight blowout)
+  // 5. SATURATION - sophisticated perceptual color transformation
+  // Inspired by DMT phenomenology: colors become more vivid, then begin shifting
+  // through perceptual color space with increasing intensity
   float satIntensity = easedSaturation * u_dose;
-  if (satIntensity > 0.01) {
+  if (satIntensity > 0.005) {
     vec3 hsv = rgb2hsv(color);
+    float originalValue = hsv.z;
     
-    // Hue rotation (audio-reactive) - gentler at low values
-    hsv.x += satIntensity * 0.15 * sin(u_time * 0.5 + u_energy * TAU);
+    // Phase 1 (0-0.3): Subtle contrast enhancement, no hue shift
+    // Phase 2 (0.3-0.6): Saturation boost, gentle hue breathing
+    // Phase 3 (0.6-1.0): Full color cycling, chromatic effects
+    
+    float phase = satIntensity;
+    
+    // Hue transformation - gradual onset of color cycling
+    float hueShiftAmount = smoothstep(0.2, 0.8, phase) * 0.3;
+    float hueWave = sin(u_time * 0.3 + hsv.z * TAU + u_energy * 2.0);
+    // Spatial variation in hue shift for chromatic depth
+    float spatialHue = sin(v_uv.x * 8.0 + v_uv.y * 6.0 + u_time * 0.2) * 0.5 + 0.5;
+    hsv.x += hueShiftAmount * hueWave * (0.5 + spatialHue * 0.5);
     hsv.x = fract(hsv.x);
     
-    // Saturation boost - preserve original saturation better at low values
-    float satBoost = 1.0 + satIntensity * 0.8;
+    // Saturation - boost midtones, preserve extremes
+    float satCurve = sin(hsv.y * PI); // Peak boost at mid-saturation
+    float satBoost = 1.0 + phase * 0.6 * (0.5 + satCurve * 0.5);
     hsv.y = hsv.y * satBoost;
     hsv.y = min(hsv.y, 1.0);
     
-    // Value modulation - prevent highlight blowout with soft clamp
-    float valueMod = 1.0 + satIntensity * 0.15 + u_energy * 0.08;
-    hsv.z = hsv.z * valueMod;
-    hsv.z = hsv.z / (hsv.z + 0.1); // Soft highlight compression
-    hsv.z = hsv.z * 1.1; // Compensate for compression
+    // Value - enhance contrast without blowing highlights
+    // S-curve contrast enhancement
+    float contrastAmount = phase * 0.4;
+    float midpoint = 0.5;
+    float contrastValue = hsv.z - midpoint;
+    contrastValue = contrastValue * (1.0 + contrastAmount * 2.0);
+    hsv.z = midpoint + contrastValue;
+    
+    // Soft clip highlights and shadows
+    hsv.z = hsv.z / (1.0 + abs(hsv.z - 0.5) * phase * 0.3);
+    hsv.z = clamp(hsv.z, 0.02, 0.98);
+    
+    // Audio-reactive brightness pulse (subtle)
+    hsv.z *= 1.0 + u_energy * phase * 0.15;
     
     color = hsv2rgb(hsv);
+    
+    // Chromatic aberration hint at high intensity
+    if (phase > 0.5) {
+      float chromaStrength = (phase - 0.5) * 0.02;
+      vec2 chromaOffset = (v_uv - 0.5) * chromaStrength;
+      vec2 redCoord = clamp(sampleCoord + chromaOffset, 0.001, 0.999);
+      vec2 blueCoord = clamp(sampleCoord - chromaOffset, 0.001, 0.999);
+      color.r = mix(color.r, texture(u_image, redCoord).r, 0.3);
+      color.b = mix(color.b, texture(u_image, blueCoord).b, 0.3);
+    }
   }
   
   // Add high frequency shimmer
