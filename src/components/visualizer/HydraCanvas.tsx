@@ -41,6 +41,25 @@ const HydraCanvas = ({ seed, mode, seafloor, storm, beacon, analyser }: HydraCan
     // Access Hydra's global functions
     // @ts-ignore - Hydra adds global functions
     const { osc, noise, gradient, shape, o0, time, render } = window;
+
+    // Hyperbolic geometry helpers - perceptual curvature
+    const hyperbolicDensity = (baseValue: number, storm: number) => {
+      // At low storm: normal spacing
+      // At high storm: exponential density increase (hyperbolic packing)
+      return baseValue * (1 + storm * 2.5);
+    };
+
+    const hyperbolicBranching = (baseSegments: number, storm: number) => {
+      // Discrete steps: 4 → 6 → 8 → 12 → 16 → 20
+      // More branches = more hyperbolic feel
+      const branchFactor = Math.floor(1 + storm * 5);
+      return Math.min(baseSegments + branchFactor * 2, 20);
+    };
+
+    const hyperbolicWarp = (baseAmount: number, storm: number) => {
+      // Non-linear warp: mild at low storm, intense curved feel at high
+      return baseAmount * (0.5 + storm * 1.5) * (1 + storm * storm * 0.8);
+    };
     
     const fftData = [0, 0, 0, 0];
     
@@ -56,27 +75,39 @@ const HydraCanvas = ({ seed, mode, seafloor, storm, beacon, analyser }: HydraCan
 
     // 6 VISUAL MODES FROM ORIGINAL CODE
     switch (mode) {
-      case 1: // PORTAL
-        osc(4, 0.03 + storm * 0.18, 0.2)
+      case 1: // PORTAL - Hyperbolic iris/mandala
+        osc(
+          () => hyperbolicDensity(4, storm * 0.3),
+          0.03 + storm * 0.18,
+          0.2
+        )
           .color(
             0.7 + 0.3 * beacon,
             0.1 + 0.5 * beacon,
             0.5 + 0.5 * beacon
           )
-          .kaleid(4 + Math.floor(beacon * 4))
+          .kaleid(() => hyperbolicBranching(4 + Math.floor(beacon * 4), storm))
           .modulate(
-            osc(1 + seafloor * 1.5, 0.05 + storm * 0.1, 0.5),
-            () => (0.15 + storm * 0.7) * fftData[0]
+            osc(
+              () => hyperbolicDensity(1 + seafloor * 1.5, storm * 0.4),
+              0.05 + storm * 0.1,
+              0.5
+            ),
+            () => hyperbolicWarp(0.15, storm) * fftData[0]
           )
           .rotate(
             () => time * (0.01 + storm * 0.06) + fftData[1] * 0.4
           )
           .scale(
-            () => 1.0 + seafloor * 0.7 + fftData[0] * 0.5
+            () => 1.0 + seafloor * 0.7 + fftData[0] * 0.5,
+            () => 1.0 + storm * 0.3 // Asymmetric scale for hyperbolic stretch
           )
           .modulate(
-            noise(3 + storm * 5, 0.2 + storm * 0.4),
-            () => (0.1 + storm * 0.6) * fftData[2]
+            noise(
+              () => hyperbolicDensity(3, storm),
+              0.2 + storm * 0.4
+            ),
+            () => hyperbolicWarp(0.1, storm) * fftData[2]
           )
           .contrast(() => 1 + seafloor * 1.0)
           .brightness(
@@ -85,7 +116,7 @@ const HydraCanvas = ({ seed, mode, seafloor, storm, beacon, analyser }: HydraCan
           .out(o0);
         break;
 
-      case 2: // DRIFT
+      case 2: // DRIFT - Hyperbolic wave interference
         {
           // @ts-ignore - Hydra extends arrays with .fast()
           const thresh1 = [0.3, 0.7].fast(0.75);
@@ -95,7 +126,7 @@ const HydraCanvas = ({ seed, mode, seafloor, storm, beacon, analyser }: HydraCan
           const thresh3 = [0.3, 0.7].fast(0.25);
           
           osc(
-            () => 40 + 40 * beacon,
+            () => hyperbolicDensity(40 + 40 * beacon, storm * 0.5),
             () => -0.05 - 0.25 * seafloor,
             0
           )
@@ -103,7 +134,7 @@ const HydraCanvas = ({ seed, mode, seafloor, storm, beacon, analyser }: HydraCan
             .color(0, () => 0.3 + 0.7 * beacon, 1)
             .add(
               osc(
-                () => 24 + 20 * storm,
+                () => hyperbolicDensity(24 + 20 * storm, storm * 0.6),
                 () => 0.08 + 0.25 * fftData[0],
                 0
               )
@@ -112,16 +143,16 @@ const HydraCanvas = ({ seed, mode, seafloor, storm, beacon, analyser }: HydraCan
                 .color(1, 0, 0)
                 .modulateScale(
                   osc(
-                    () => 50 + 40 * seafloor,
+                    () => hyperbolicDensity(50 + 40 * seafloor, storm * 0.4),
                     () => -0.01 - 0.02 * storm,
                     0
                   ).thresh(thresh1, 0),
-                  () => 0.5 + 1.5 * seafloor
+                  () => hyperbolicWarp(0.5 + 1.5 * seafloor, storm * 0.3)
                 )
             )
             .diff(
               osc(
-                () => 24 + 20 * storm,
+                () => hyperbolicDensity(24 + 20 * storm, storm * 0.6),
                 () => 0.06 + 0.25 * fftData[2],
                 0
               )
@@ -130,67 +161,93 @@ const HydraCanvas = ({ seed, mode, seafloor, storm, beacon, analyser }: HydraCan
                 .color(1, 0, 1)
                 .modulateScale(
                   osc(
-                    () => 50 + 40 * beacon,
+                    () => hyperbolicDensity(50 + 40 * beacon, storm * 0.4),
                     () => -0.015 - 0.02 * storm,
                     0
                   ).thresh(thresh2, 0),
-                  () => 0.5 + 1.3 * beacon
+                  () => hyperbolicWarp(0.5 + 1.3 * beacon, storm * 0.3)
                 )
             )
             .modulateRotate(
               osc(
-                () => 54 + 20 * storm,
+                () => hyperbolicDensity(54 + 20 * storm, storm * 0.5),
                 () => -0.005 - 0.01 * fftData[1],
                 0
               ).thresh(thresh3, 0),
-              () => 0.2 + storm * 1.2
+              () => hyperbolicWarp(0.2, storm * 1.2)
             )
             .modulateScale(
               osc(
-                () => 44 + 30 * seafloor,
+                () => hyperbolicDensity(44 + 30 * seafloor, storm * 0.4),
                 () => -0.02 - 0.02 * fftData[0],
                 0
               ).thresh(thresh3, 0),
-              () => 1.0 + 1.5 * seafloor
+              () => hyperbolicWarp(1.0 + 1.5 * seafloor, storm * 0.2)
             )
             .colorama(() => Math.sin(time / 27) * 0.01222 + 9.89)
-            .scale(() => 1.4 + 0.8 * seafloor)
+            .scale(
+              () => 1.4 + 0.8 * seafloor,
+              () => 1.4 + 0.8 * seafloor + storm * 0.4 // Hyperbolic asymmetry
+            )
             .out(o0);
         }
         break;
 
-      case 3: // BLOOM
-        osc(8, 0.15, 0.4)
-          .kaleid(9)
+      case 3: // BLOOM - Hyperbolic flower/mandala
+        osc(
+          () => hyperbolicDensity(8, storm * 0.4),
+          0.15 + storm * 0.1,
+          0.4
+        )
+          .kaleid(() => hyperbolicBranching(9, storm))
           .color(1.1, 0.6, 1.4)
-          .modulateRepeat(osc(2, 0.05, 0.9), 3, 2, 0.5, 0.2)
-          .modulate(noise(4, 0.25), () => fftData[0] * 0.7)
+          .modulateRepeat(
+            osc(
+              () => hyperbolicDensity(2, storm * 0.3),
+              0.05,
+              0.9
+            ),
+            () => 3 + Math.floor(storm * 3), // More repeats = hyperbolic tiling
+            2,
+            0.5,
+            0.2
+          )
+          .modulate(
+            noise(
+              () => hyperbolicDensity(4, storm),
+              0.25
+            ),
+            () => hyperbolicWarp(fftData[0] * 0.7, storm * 0.5)
+          )
           .rotate(() => time * 0.05 + fftData[2] * 0.4)
-          .scale(() => 1.0 + fftData[1] * 0.2)
+          .scale(
+            () => 1.0 + fftData[1] * 0.2 + seafloor * 0.3,
+            () => 1.0 + fftData[1] * 0.2 + seafloor * 0.3 + storm * 0.2
+          )
           .out(o0);
         break;
 
-      case 4: // SCANNER
+      case 4: // SCANNER - Hyperbolic scan lines/moiré
         {
           const pattern = () =>
             osc(
-              () => 80 + 240 * beacon,
+              () => hyperbolicDensity(80 + 240 * beacon, storm * 0.6),
               () => 0.005 + 0.05 * storm,
               0
             )
-              .kaleid(() => 20 + Math.round(80 * seafloor))
+              .kaleid(() => hyperbolicBranching(20 + Math.round(80 * seafloor), storm * 0.7))
               .scale(
-                () => 1.0 + 1.5 * seafloor,
-                () => 0.3 + 0.5 * storm
+                () => 1.0 + 1.5 * seafloor + storm * 0.3,
+                () => 0.3 + 0.5 * storm + seafloor * 0.4 // Hyperbolic stretch
               );
 
           pattern()
             .scrollX(
-              () => 0.1 + 0.6 * storm,
+              () => hyperbolicWarp(0.1 + 0.6 * storm, storm * 0.4),
               () => 0.01 + 0.05 * (fftData[0] + fftData[1])
             )
             .scrollY(
-              () => (fftData[2] - 0.5) * 0.3 * (0.2 + storm),
+              () => (fftData[2] - 0.5) * 0.3 * (0.2 + storm) * (1 + storm * 0.5),
               () => 0.01 + 0.05 * fftData[3]
             )
             .mult(
@@ -198,57 +255,72 @@ const HydraCanvas = ({ seed, mode, seafloor, storm, beacon, analyser }: HydraCan
                 .contrast(() => 1.0 + 1.5 * beacon)
                 .brightness(() => -0.2 + 0.6 * beacon + 0.3 * fftData[3])
             )
+            .modulate(
+              noise(
+                () => hyperbolicDensity(5, storm),
+                0.1
+              ),
+              () => storm * 0.15 // Add curved space distortion
+            )
             .out(o0);
         }
         break;
 
-      case 5: // RITUAL
-        noise(3, 0.08 + storm * 0.2)
+      case 5: // RITUAL - Hyperbolic pixelated sacred geometry
+        noise(
+          () => hyperbolicDensity(3, storm),
+          0.08 + storm * 0.2
+        )
           .color(
             () => 0.4 + 0.2 * seafloor,
             0.3,
             () => 0.7 + 0.3 * beacon
           )
           .pixelate(
-            () => 40 + 80 * (1 - seafloor),
-            () => 30 + 60 * (1 - seafloor)
+            () => Math.max(8, 40 + 80 * (1 - seafloor) - storm * 30), // Denser at high storm
+            () => Math.max(8, 30 + 60 * (1 - seafloor) - storm * 20)
           )
           .modulate(
             osc(
-              () => 1.0 + 1.5 * storm,
+              () => hyperbolicDensity(1.0 + 1.5 * storm, storm * 0.5),
               () => 0.06 + 0.12 * storm,
               0.6
-            ).kaleid(() => 3 + Math.round(5 * beacon)),
-            () => 0.1 + (fftData[0] + fftData[1]) * 0.4
+            ).kaleid(() => hyperbolicBranching(3 + Math.round(5 * beacon), storm)),
+            () => hyperbolicWarp(0.1 + (fftData[0] + fftData[1]) * 0.4, storm * 0.6)
           )
           .rotate(
             () => time * (0.01 + 0.03 * storm) + fftData[1] * 0.25
+          )
+          .scale(
+            () => 1.0 + storm * 0.3, // Hyperbolic zoom
+            () => 1.0 + storm * 0.4
           )
           .brightness(() => 0.05 + fftData[2] * 0.35)
           .out(o0);
         break;
 
-      case 6: // TIDE
+      case 6: // TIDE - Hyperbolic wave complex
         osc(
-          () => 150 + 150 * storm,
+          () => hyperbolicDensity(150 + 150 * storm, storm * 0.7),
           () => 0.04 + 0.18 * fftData[0],
           () => 1.2 + 1.5 * beacon
         )
           .modulate(
             osc(
-              () => 1 + 3 * storm,
+              () => hyperbolicDensity(1 + 3 * storm, storm * 0.5),
               () => -0.1 - 0.3 * seafloor,
               () => 60 + 60 * fftData[1]
-            ).rotate(() => 10 + 10 * beacon)
+            ).rotate(() => 10 + 10 * beacon),
+            () => hyperbolicWarp(0.05, storm * 0.8)
           )
           .mult(
             osc(
-              () => 150 + 150 * storm,
+              () => hyperbolicDensity(150 + 150 * storm, storm * 0.6),
               () => -0.05 - 0.2 * fftData[2],
               2
             ).pixelate(
-              () => 20 + 80 * (1 - seafloor),
-              () => 20 + 80 * (1 - seafloor)
+              () => Math.max(8, 20 + 80 * (1 - seafloor) - storm * 25),
+              () => Math.max(8, 20 + 80 * (1 - seafloor) - storm * 25)
             )
           )
           .color(
@@ -258,13 +330,14 @@ const HydraCanvas = ({ seed, mode, seafloor, storm, beacon, analyser }: HydraCan
           )
           .modulate(
             osc(
-              () => 3 + 5 * storm,
+              () => hyperbolicDensity(3 + 5 * storm, storm * 0.5),
               () => -0.05 - 0.08 * fftData[0]
-            ).rotate(() => 5 + 10 * beacon)
+            ).rotate(() => 5 + 10 * beacon),
+            () => hyperbolicWarp(0.03, storm * 0.9)
           )
           .add(
             osc(
-              () => 6 + 6 * storm,
+              () => hyperbolicDensity(6 + 6 * storm, storm * 0.4),
               () => -0.4 - 0.4 * fftData[1],
               () => 400 + 400 * seafloor
             ).color(1, 0, 1)
@@ -276,23 +349,28 @@ const HydraCanvas = ({ seed, mode, seafloor, storm, beacon, analyser }: HydraCan
               1
             )
               .luma()
-              .repeatX(() => 1 + Math.round(beacon * 3))
-              .repeatY(() => 1 + Math.round(seafloor * 3))
+              .repeatX(() => 1 + Math.round(beacon * 3) + Math.floor(storm * 2)) // More hyperbolic repeats
+              .repeatY(() => 1 + Math.round(seafloor * 3) + Math.floor(storm * 2))
               .colorama(() => 0.5 + 9.5 * beacon)
           )
           .modulate(
             osc(
-              () => 4 + 10 * storm,
+              () => hyperbolicDensity(4 + 10 * storm, storm * 0.6),
               () => -0.1 - 0.2 * fftData[3],
               () => 400 + 400 * beacon
-            ).rotate(() => 3 + 6 * storm)
+            ).rotate(() => 3 + 6 * storm),
+            () => hyperbolicWarp(0.04, storm * 1.0)
           )
           .add(
             osc(
-              () => 2 + 6 * storm,
+              () => hyperbolicDensity(2 + 6 * storm, storm * 0.3),
               () => 0.4 + 1.0 * fftData[0],
               () => 80 + 60 * seafloor
             ).color(0.2, 0, 1)
+          )
+          .scale(
+            () => 1.0 + storm * 0.25,
+            () => 1.0 + storm * 0.35 // Hyperbolic asymmetry
           )
           .out(o0);
         break;
