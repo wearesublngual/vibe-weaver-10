@@ -349,15 +349,21 @@ void main() {
     satIntensity = 0.7 + (frontLoaded - 0.7) * 0.7;
   }
   
-  if (satIntensity > 0.005) {
+  if (satIntensity > 0.005 || beat > 0.01) {
     vec3 hsv = rgb2hsv(color);
     
-    // PHASE 1 (0-0.2): VIVID - colors POP (no audio timing needed)
+    // BEAT-DRIVEN SATURATION PUNCH
+    // Kicks trigger momentary saturation/brightness boost
+    float beatPunch = beat * beat * 1.5; // Squared for snappier response
+    
+    // PHASE 1 (0-0.2): VIVID - colors POP
     float vividPhase = smoothstep(0.0, 0.2, satIntensity);
-    hsv.y = hsv.y * (1.0 + vividPhase * 2.5);
+    // Beat adds extra vivid punch
+    float vividBoost = vividPhase * 2.5 + beatPunch * 2.0;
+    hsv.y = hsv.y * (1.0 + vividBoost);
     hsv.y = min(hsv.y, 1.0);
     
-    // PHASE 2 (0.15-0.4): Color separation (no audio timing needed)
+    // PHASE 2 (0.15-0.4): Color separation
     float separationPhase = smoothstep(0.15, 0.4, satIntensity);
     if (separationPhase > 0.0) {
       float hueBands = 8.0 - separationPhase * 5.0;
@@ -366,10 +372,8 @@ void main() {
     }
     
     // PHASE 3 (0.35-0.65): Hue rotation
-    // User controls HOW MUCH rotation (via slider), Audio controls SPEED
     float rotationPhase = smoothstep(0.35, 0.65, satIntensity);
     if (rotationPhase > 0.0) {
-      // Base slow rotation + audio-driven acceleration
       float hueSpeed = 0.2 + u_high * 1.2 + u_energy * 0.5;
       float hueShift = u_time * hueSpeed * animationTempo;
       hueShift += sin(v_uv.x * 6.0 + v_uv.y * 5.0) * 0.25;
@@ -377,42 +381,36 @@ void main() {
     }
     
     // PHASE 4 (0.55-1.0): Psychedelic rainbow
-    // User controls INTENSITY, Audio controls CYCLING SPEED
     float psychPhase = smoothstep(0.55, 1.0, satIntensity);
     if (psychPhase > 0.0) {
-      // Rainbow cycling - audio drives speed only
       float cycleSpeed = 0.3 + u_energy * 0.6;
       float lumaHue = hsv.z * 1.5 + u_time * cycleSpeed * animationTempo;
       hsv.x = fract(mix(hsv.x, lumaHue, psychPhase * 0.9));
       
-      // Inversion blend (intensity only, no audio)
       vec3 inverted = vec3(1.0) - color;
       vec3 invertedHsv = rgb2hsv(inverted);
       hsv.x = fract(mix(hsv.x, invertedHsv.x, psychPhase * 0.5));
       
-      // Max saturation (user controlled)
       hsv.y = mix(hsv.y, 1.0, psychPhase * 0.8);
     }
     
-    // Contrast boost (user controlled via saturation slider)
+    // Contrast boost + beat brightness punch
     float contrast = 1.0 + satIntensity * 1.5;
     hsv.z = (hsv.z - 0.5) * contrast + 0.5;
+    // Beat punches brightness
+    hsv.z += beatPunch * 0.3;
     hsv.z = clamp(hsv.z, 0.0, 1.0);
     
     color = hsv2rgb(hsv);
   }
   
-  // High frequency shimmer - audio controls shimmer SPEED, user controls via saturation
+  // High frequency shimmer
   vec3 shimmer = vec3(
     sin(u_time * shimmerSpeed + v_uv.x * 30.0) * 0.5 + 0.5,
     sin(u_time * shimmerSpeed + v_uv.y * 30.0 + 2.0) * 0.5 + 0.5,
     sin(u_time * shimmerSpeed + (v_uv.x + v_uv.y) * 15.0 + 4.0) * 0.5 + 0.5
   );
   color += shimmer * effectiveSaturation * effectiveDose * 0.08;
-  
-  // Beat flash - subtle white pulse on kicks (separate overlay, not transform intensity)
-  float beatFlash = beat * 0.2;
-  color = mix(color, vec3(1.0, 0.98, 0.95), beatFlash);
   
   // Vignette (user controlled via dose)
   float dist = length(v_uv - 0.5);
