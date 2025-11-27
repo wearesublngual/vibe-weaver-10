@@ -79,6 +79,7 @@ const DebugOverlay = ({ params, analyser, audioParams = DEFAULT_AUDIO_PARAMS, ef
     bass: 0, lowMid: 0, mid: 0, high: 0, energy: 0, beatIntensity: 0
   });
   const [beatFlash, setBeatFlash] = useState(false);
+  const [effectDebug, setEffectDebug] = useState<any>(null);
   const analyzerRef = useRef<AudioAnalyzer | null>(null);
   const frameRef = useRef<number>(0);
   
@@ -107,12 +108,18 @@ const DebugOverlay = ({ params, analyser, audioParams = DEFAULT_AUDIO_PARAMS, ef
           setTimeout(() => setBeatFlash(false), 100);
         }
       }
+      
+      // Get effect debug values
+      if (effectsChain) {
+        setEffectDebug(effectsChain.getDebugValues());
+      }
+      
       frameRef.current = requestAnimationFrame(update);
     };
     
     frameRef.current = requestAnimationFrame(update);
     return () => cancelAnimationFrame(frameRef.current);
-  }, []);
+  }, [effectsChain]);
   
   // Compute timing variables (matching shader logic)
   const timingVars = {
@@ -134,138 +141,205 @@ const DebugOverlay = ({ params, analyser, audioParams = DEFAULT_AUDIO_PARAMS, ef
   });
 
   return (
-    <div className="fixed top-20 right-4 z-50 font-mono text-[10px] bg-void/90 border border-phosphor/30 rounded p-3 backdrop-blur-sm w-80 max-h-[80vh] overflow-y-auto">
-      <div className="flex items-center justify-between mb-3 border-b border-phosphor/20 pb-2">
-        <span className="text-phosphor font-bold text-xs">DEBUG [D to hide]</span>
-        <div className={`w-3 h-3 rounded-full transition-all ${beatFlash ? 'bg-red-500 scale-125' : 'bg-void border border-phosphor/30'}`} />
-      </div>
-      
-      {/* Audio Analysis */}
-      <div className="mb-4">
-        <div className="text-muted-foreground mb-2 font-semibold">AUDIO ANALYSIS</div>
-        <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-          <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">Bass</span>
-            <div className="flex items-center gap-2">
-              <span className="text-phosphor w-8 text-right">{audioData.bass.toFixed(2)}</span>
-              <MiniBar value={audioData.bass} color="bg-red-500" />
-            </div>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">Low-mid</span>
-            <div className="flex items-center gap-2">
-              <span className="text-phosphor w-8 text-right">{audioData.lowMid.toFixed(2)}</span>
-              <MiniBar value={audioData.lowMid} color="bg-orange-500" />
-            </div>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">Mid</span>
-            <div className="flex items-center gap-2">
-              <span className="text-phosphor w-8 text-right">{audioData.mid.toFixed(2)}</span>
-              <MiniBar value={audioData.mid} color="bg-yellow-500" />
-            </div>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">High</span>
-            <div className="flex items-center gap-2">
-              <span className="text-phosphor w-8 text-right">{audioData.high.toFixed(2)}</span>
-              <MiniBar value={audioData.high} color="bg-cyan-500" />
-            </div>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">Energy</span>
-            <div className="flex items-center gap-2">
-              <span className="text-phosphor w-8 text-right">{audioData.energy.toFixed(2)}</span>
-              <MiniBar value={audioData.energy} color="bg-purple-500" />
-            </div>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">Beat</span>
-            <div className="flex items-center gap-2">
-              <span className="text-phosphor w-8 text-right">{audioData.beatIntensity.toFixed(2)}</span>
-              <MiniBar value={audioData.beatIntensity} color="bg-pink-500" />
-            </div>
-          </div>
+    <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
+      <div className="font-mono text-[10px] bg-void/95 border border-phosphor/30 rounded p-4 backdrop-blur-sm w-[700px] max-h-[85vh] overflow-y-auto pointer-events-auto">
+        <div className="flex items-center justify-between mb-3 border-b border-phosphor/20 pb-2">
+          <span className="text-phosphor font-bold text-xs">DEBUG OVERLAY [D to hide]</span>
+          <div className={`w-3 h-3 rounded-full transition-all ${beatFlash ? 'bg-red-500 scale-125' : 'bg-void border border-phosphor/30'}`} />
         </div>
-      </div>
-      
-      {/* Timing Variables */}
-      <div className="mb-4 border-t border-phosphor/20 pt-3">
-        <div className="text-muted-foreground mb-2 font-semibold">TIMING VARIABLES</div>
-        <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Breath speed</span>
-            <span className="text-signal">{timingVars.breathPhaseSpeed.toFixed(2)}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Flow speed</span>
-            <span className="text-signal">{timingVars.flowSpeed.toFixed(3)}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Shimmer speed</span>
-            <span className="text-signal">{timingVars.shimmerSpeed.toFixed(1)}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Anim tempo</span>
-            <span className="text-signal">{timingVars.animationTempo.toFixed(2)}</span>
-          </div>
-        </div>
-      </div>
-      
-      {/* Audio Effects */}
-      <div className="mb-4 border-t border-phosphor/20 pt-3">
-        <div className="text-muted-foreground mb-2 font-semibold">AUDIO EFFECTS</div>
-        <div className="grid grid-cols-3 gap-2">
-          <div className="border border-phosphor/10 rounded p-2 bg-void/30">
-            <div className="text-muted-foreground text-[9px]">ECHO</div>
-            <div className="text-signal">{(audioParams.echo * 100).toFixed(0)}%</div>
-            <MiniBar value={audioParams.echo} color="bg-blue-500" />
-          </div>
-          <div className="border border-phosphor/10 rounded p-2 bg-void/30">
-            <div className="text-muted-foreground text-[9px]">DRIFT</div>
-            <div className="text-signal">{(audioParams.drift * 100).toFixed(0)}%</div>
-            <MiniBar value={audioParams.drift} color="bg-emerald-500" />
-          </div>
-          <div className="border border-phosphor/10 rounded p-2 bg-void/30">
-            <div className="text-muted-foreground text-[9px]">BREAK</div>
-            <div className="text-signal">{(audioParams.break_ * 100).toFixed(0)}%</div>
-            <MiniBar value={audioParams.break_} color="bg-amber-500" />
-          </div>
-        </div>
-      </div>
-      
-      {/* Slider Values */}
-      <div className="border-t border-phosphor/20 pt-3">
-        <div className="text-muted-foreground mb-2 font-semibold">VISUAL SLIDER CURVES</div>
-        <div className="space-y-2">
-          {sliderData.map(({ key, raw, eased, effective, curveName, curve, zone }) => (
-            <div key={key} className="border border-phosphor/10 rounded p-2 bg-void/30">
-              <div className="flex items-center justify-between mb-1">
-                <span className={`font-bold ${key === 'dose' ? 'text-phosphor' : 'text-foreground'}`}>
-                  {key.toUpperCase()}
-                </span>
-                <span className={`text-[9px] ${zone.color}`}>{zone.name}</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <MiniCurve fn={curve} currentX={raw} />
-                <div className="flex-1 grid grid-cols-3 gap-1 text-[9px]">
-                  <div>
-                    <div className="text-muted-foreground">raw</div>
-                    <div className="text-foreground">{raw.toFixed(2)}</div>
+        
+        {/* Two column layout */}
+        <div className="grid grid-cols-2 gap-4">
+          {/* LEFT COLUMN */}
+          <div>
+            {/* Audio Analysis */}
+            <div className="mb-4">
+              <div className="text-muted-foreground mb-2 font-semibold">AUDIO ANALYSIS</div>
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Bass</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-phosphor w-8 text-right">{audioData.bass.toFixed(2)}</span>
+                    <MiniBar value={audioData.bass} color="bg-red-500" />
                   </div>
-                  <div>
-                    <div className="text-muted-foreground">eased</div>
-                    <div className="text-signal">{eased.toFixed(2)}</div>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Low-mid</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-phosphor w-8 text-right">{audioData.lowMid.toFixed(2)}</span>
+                    <MiniBar value={audioData.lowMid} color="bg-orange-500" />
                   </div>
-                  <div>
-                    <div className="text-muted-foreground">eff</div>
-                    <div className="text-phosphor">{effective.toFixed(2)}</div>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Mid</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-phosphor w-8 text-right">{audioData.mid.toFixed(2)}</span>
+                    <MiniBar value={audioData.mid} color="bg-yellow-500" />
+                  </div>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">High</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-phosphor w-8 text-right">{audioData.high.toFixed(2)}</span>
+                    <MiniBar value={audioData.high} color="bg-cyan-500" />
+                  </div>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Energy</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-phosphor w-8 text-right">{audioData.energy.toFixed(2)}</span>
+                    <MiniBar value={audioData.energy} color="bg-purple-500" />
+                  </div>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Beat</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-phosphor w-8 text-right">{audioData.beatIntensity.toFixed(2)}</span>
+                    <MiniBar value={audioData.beatIntensity} color="bg-pink-500" />
                   </div>
                 </div>
               </div>
-              <div className="text-[8px] text-muted-foreground/60 mt-1">{curveName}</div>
             </div>
-          ))}
+            
+            {/* Timing Variables */}
+            <div className="mb-4 border-t border-phosphor/20 pt-3">
+              <div className="text-muted-foreground mb-2 font-semibold">TIMING VARIABLES</div>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Breath</span>
+                  <span className="text-signal">{timingVars.breathPhaseSpeed.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Flow</span>
+                  <span className="text-signal">{timingVars.flowSpeed.toFixed(3)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Shimmer</span>
+                  <span className="text-signal">{timingVars.shimmerSpeed.toFixed(1)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Tempo</span>
+                  <span className="text-signal">{timingVars.animationTempo.toFixed(2)}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Audio Effects - DETAILED */}
+            <div className="border-t border-phosphor/20 pt-3">
+              <div className="text-muted-foreground mb-2 font-semibold">AUDIO EFFECTS (computed)</div>
+              
+              {/* Echo */}
+              <div className="border border-blue-500/30 rounded p-2 bg-void/30 mb-2">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="font-bold text-blue-400">ECHO</span>
+                  <span className="text-signal">{(audioParams.echo * 100).toFixed(0)}%</span>
+                </div>
+                {effectDebug?.echo && (
+                  <div className="grid grid-cols-3 gap-1 text-[9px]">
+                    <div>
+                      <div className="text-muted-foreground">wet</div>
+                      <div className="text-foreground">{(effectDebug.echo.wet * 100).toFixed(1)}%</div>
+                    </div>
+                    <div>
+                      <div className="text-muted-foreground">feedback</div>
+                      <div className="text-foreground">{(effectDebug.echo.feedback * 100).toFixed(1)}%</div>
+                    </div>
+                    <div>
+                      <div className="text-muted-foreground">delay</div>
+                      <div className="text-foreground">{(effectDebug.echo.delayTime * 1000).toFixed(0)}ms</div>
+                    </div>
+                  </div>
+                )}
+              </div>
+              
+              {/* Drift */}
+              <div className="border border-emerald-500/30 rounded p-2 bg-void/30 mb-2">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="font-bold text-emerald-400">DRIFT</span>
+                  <span className="text-signal">{(audioParams.drift * 100).toFixed(0)}%</span>
+                </div>
+                {effectDebug?.drift && (
+                  <div className="grid grid-cols-4 gap-1 text-[9px]">
+                    <div>
+                      <div className="text-muted-foreground">freq</div>
+                      <div className="text-foreground">{(effectDebug.drift.baseFreq / 1000).toFixed(1)}kHz</div>
+                    </div>
+                    <div>
+                      <div className="text-muted-foreground">depth</div>
+                      <div className="text-foreground">{effectDebug.drift.lfoDepth.toFixed(0)}Hz</div>
+                    </div>
+                    <div>
+                      <div className="text-muted-foreground">Q</div>
+                      <div className="text-foreground">{effectDebug.drift.filterQ.toFixed(1)}</div>
+                    </div>
+                    <div>
+                      <div className="text-muted-foreground">LFO</div>
+                      <div className="text-foreground">{effectDebug.drift.lfoSpeed.toFixed(2)}Hz</div>
+                    </div>
+                  </div>
+                )}
+              </div>
+              
+              {/* Break */}
+              <div className="border border-amber-500/30 rounded p-2 bg-void/30">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="font-bold text-amber-400">BREAK</span>
+                  <span className="text-signal">{(audioParams.break_ * 100).toFixed(0)}%</span>
+                </div>
+                {effectDebug?.break_ && (
+                  <div className="grid grid-cols-3 gap-1 text-[9px]">
+                    <div>
+                      <div className="text-muted-foreground">depth</div>
+                      <div className="text-foreground">{(effectDebug.break_.gateDepth * 100).toFixed(1)}%</div>
+                    </div>
+                    <div>
+                      <div className="text-muted-foreground">rate</div>
+                      <div className="text-foreground">{effectDebug.break_.gateRate.toFixed(2)}Hz</div>
+                    </div>
+                    <div>
+                      <div className="text-muted-foreground">base</div>
+                      <div className="text-foreground">{(effectDebug.break_.gateBase * 100).toFixed(1)}%</div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+          
+          {/* RIGHT COLUMN - Visual Sliders */}
+          <div>
+            <div className="text-muted-foreground mb-2 font-semibold">VISUAL SLIDER CURVES</div>
+            <div className="space-y-2">
+              {sliderData.map(({ key, raw, eased, effective, curveName, curve, zone }) => (
+                <div key={key} className="border border-phosphor/10 rounded p-2 bg-void/30">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className={`font-bold ${key === 'dose' ? 'text-phosphor' : 'text-foreground'}`}>
+                      {key.toUpperCase()}
+                    </span>
+                    <span className={`text-[9px] ${zone.color}`}>{zone.name}</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <MiniCurve fn={curve} currentX={raw} />
+                    <div className="flex-1 grid grid-cols-3 gap-1 text-[9px]">
+                      <div>
+                        <div className="text-muted-foreground">raw</div>
+                        <div className="text-foreground">{raw.toFixed(2)}</div>
+                      </div>
+                      <div>
+                        <div className="text-muted-foreground">eased</div>
+                        <div className="text-signal">{eased.toFixed(2)}</div>
+                      </div>
+                      <div>
+                        <div className="text-muted-foreground">eff</div>
+                        <div className="text-phosphor">{effective.toFixed(2)}</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-[8px] text-muted-foreground/60 mt-1">{curveName}</div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     </div>
