@@ -182,31 +182,15 @@ vec2 logPolar(vec2 uv, float intensity) {
   return mix(uv, vec2(theta / TAU + 0.5, logR), intensity);
 }
 
-// Smooth kaleidoscope with fractional segment blending
-vec2 kaleidoscopeSmooth(vec2 uv, float segments, out float blendFactor) {
+// Fixed-segment kaleidoscope with intensity blend
+vec2 kaleidoscopeFixed(vec2 uv, float segments) {
   vec2 centered = uv - 0.5;
   float angle = atan(centered.y, centered.x);
   float r = length(centered);
-  
-  // Get integer and fractional parts for smooth blending
-  float segFloor = floor(segments);
-  float segCeil = ceil(segments);
-  blendFactor = fract(segments);
-  
-  // Calculate both kaleidoscope results
-  float segAngle1 = TAU / max(segFloor, 2.0);
-  float segAngle2 = TAU / max(segCeil, 3.0);
-  
-  float angle1 = mod(angle, segAngle1);
-  angle1 = abs(angle1 - segAngle1 * 0.5);
-  
-  float angle2 = mod(angle, segAngle2);
-  angle2 = abs(angle2 - segAngle2 * 0.5);
-  
-  // Smooth blend between segment counts
-  float blendedAngle = mix(angle1, angle2, smoothstep(0.0, 1.0, blendFactor));
-  
-  return vec2(cos(blendedAngle), sin(blendedAngle)) * r + 0.5;
+  float segmentAngle = TAU / segments;
+  angle = mod(angle, segmentAngle);
+  angle = abs(angle - segmentAngle * 0.5);
+  return vec2(cos(angle), sin(angle)) * r + 0.5;
 }
 
 vec3 rgb2hsv(vec3 c) {
@@ -277,13 +261,12 @@ void main() {
     coord = logPolar(coord, recursionIntensity);
   }
   
-  // 2. SYMMETRY - kaleidoscope (smooth fractional segment blending)
-  // Zoomed range: 2.5 to 8 segments for smoother transitions
-  float symmetryStrength = easedSymmetry * u_dose;
-  float segments = 2.5 + symmetryStrength * 5.5;
-  if (symmetryStrength > 0.02) {
-    float blendFactor;
-    coord = kaleidoscopeSmooth(coord, segments, blendFactor);
+  // 2. SYMMETRY - intensity-based blend (no segment count changes)
+  // Fixed 6-fold symmetry, slider controls blend from original to kaleidoscope
+  float symmetryStrength = smoothstep(0.0, 1.0, easedSymmetry * u_dose);
+  if (symmetryStrength > 0.01) {
+    vec2 kCoord = kaleidoscopeFixed(coord, 6.0);
+    coord = mix(coord, kCoord, symmetryStrength);
   }
   
   // 3. BREATHING - radial pulsing (audio-reactive)
@@ -315,60 +298,60 @@ void main() {
   sampleCoord.y = 1.0 - sampleCoord.y;
   vec3 color = texture(u_image, sampleCoord).rgb;
   
-  // 5. SATURATION - sophisticated perceptual color transformation
-  // Inspired by DMT phenomenology: colors become more vivid, then begin shifting
-  // through perceptual color space with increasing intensity
+  // 5. SATURATION - dramatic perceptual color transformation
+  // Clear progression: normal → vivid → shifting → psychedelic
   float satIntensity = easedSaturation * u_dose;
   if (satIntensity > 0.005) {
     vec3 hsv = rgb2hsv(color);
-    float originalValue = hsv.z;
     
-    // Phase 1 (0-0.3): Subtle contrast enhancement, no hue shift
-    // Phase 2 (0.3-0.6): Saturation boost, gentle hue breathing
-    // Phase 3 (0.6-1.0): Full color cycling, chromatic effects
-    
-    float phase = satIntensity;
-    
-    // Hue transformation - gradual onset of color cycling
-    float hueShiftAmount = smoothstep(0.2, 0.8, phase) * 0.3;
-    float hueWave = sin(u_time * 0.3 + hsv.z * TAU + u_energy * 2.0);
-    // Spatial variation in hue shift for chromatic depth
-    float spatialHue = sin(v_uv.x * 8.0 + v_uv.y * 6.0 + u_time * 0.2) * 0.5 + 0.5;
-    hsv.x += hueShiftAmount * hueWave * (0.5 + spatialHue * 0.5);
-    hsv.x = fract(hsv.x);
-    
-    // Saturation - boost midtones, preserve extremes
-    float satCurve = sin(hsv.y * PI); // Peak boost at mid-saturation
-    float satBoost = 1.0 + phase * 0.6 * (0.5 + satCurve * 0.5);
-    hsv.y = hsv.y * satBoost;
+    // PHASE 1 (0-0.25): Vivid boost - colors pop
+    float vividPhase = smoothstep(0.0, 0.25, satIntensity);
+    hsv.y = hsv.y * (1.0 + vividPhase * 1.2); // Strong saturation boost
     hsv.y = min(hsv.y, 1.0);
     
-    // Value - enhance contrast without blowing highlights
-    // S-curve contrast enhancement
-    float contrastAmount = phase * 0.4;
-    float midpoint = 0.5;
-    float contrastValue = hsv.z - midpoint;
-    contrastValue = contrastValue * (1.0 + contrastAmount * 2.0);
-    hsv.z = midpoint + contrastValue;
+    // PHASE 2 (0.25-0.5): Color separation - distinct bands
+    float separationPhase = smoothstep(0.25, 0.5, satIntensity);
+    if (separationPhase > 0.0) {
+      // Posterize hue into bands
+      float hueBands = 6.0 - separationPhase * 3.0; // 6 bands → 3 bands
+      float quantizedHue = floor(hsv.x * hueBands + 0.5) / hueBands;
+      hsv.x = mix(hsv.x, quantizedHue, separationPhase * 0.6);
+    }
     
-    // Soft clip highlights and shadows
-    hsv.z = hsv.z / (1.0 + abs(hsv.z - 0.5) * phase * 0.3);
-    hsv.z = clamp(hsv.z, 0.02, 0.98);
+    // PHASE 3 (0.5-0.75): Hue rotation - colors shift continuously
+    float rotationPhase = smoothstep(0.5, 0.75, satIntensity);
+    if (rotationPhase > 0.0) {
+      float hueShift = u_time * 0.15 + u_energy * 0.5;
+      hueShift += sin(v_uv.x * 4.0 + v_uv.y * 3.0) * 0.15; // Spatial variation
+      hsv.x = fract(hsv.x + hueShift * rotationPhase * 0.5);
+    }
     
-    // Audio-reactive brightness pulse (subtle)
-    hsv.z *= 1.0 + u_energy * phase * 0.15;
+    // PHASE 4 (0.75-1.0): Psychedelic - rainbow cycling + inversion hints
+    float psychPhase = smoothstep(0.75, 1.0, satIntensity);
+    if (psychPhase > 0.0) {
+      // Rainbow cycling based on luminance
+      float lumaHue = hsv.z * 0.8 + u_time * 0.2;
+      hsv.x = fract(mix(hsv.x, lumaHue, psychPhase * 0.7));
+      
+      // Partial inversion for alien colors
+      vec3 inverted = vec3(1.0) - color;
+      vec3 invertedHsv = rgb2hsv(inverted);
+      hsv.x = fract(mix(hsv.x, invertedHsv.x, psychPhase * 0.3));
+      
+      // Push saturation to max
+      hsv.y = mix(hsv.y, 1.0, psychPhase * 0.5);
+    }
+    
+    // Contrast boost throughout (stronger effect)
+    float contrast = 1.0 + satIntensity * 0.8;
+    hsv.z = (hsv.z - 0.5) * contrast + 0.5;
+    hsv.z = clamp(hsv.z, 0.0, 1.0);
+    
+    // Audio reactivity
+    hsv.z *= 1.0 + u_energy * satIntensity * 0.2;
+    hsv.z = min(hsv.z, 1.0);
     
     color = hsv2rgb(hsv);
-    
-    // Chromatic aberration hint at high intensity
-    if (phase > 0.5) {
-      float chromaStrength = (phase - 0.5) * 0.02;
-      vec2 chromaOffset = (v_uv - 0.5) * chromaStrength;
-      vec2 redCoord = clamp(sampleCoord + chromaOffset, 0.001, 0.999);
-      vec2 blueCoord = clamp(sampleCoord - chromaOffset, 0.001, 0.999);
-      color.r = mix(color.r, texture(u_image, redCoord).r, 0.3);
-      color.b = mix(color.b, texture(u_image, blueCoord).b, 0.3);
-    }
   }
   
   // Add high frequency shimmer
