@@ -1,11 +1,11 @@
 /**
  * Image Upload Component for Visualizer
- * Handles image upload, resize, and preview
+ * Handles image upload, resize, and preset selection
  */
 
-import { useRef, useState, useCallback } from 'react';
+import { useRef, useState, useCallback, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Upload, X, Image as ImageIcon } from 'lucide-react';
+import { X, Image as ImageIcon, Upload } from 'lucide-react';
 
 interface ImageUploadProps {
   onImageLoad: (image: HTMLImageElement) => void;
@@ -14,10 +14,23 @@ interface ImageUploadProps {
 
 const MAX_SIZE = 1024; // Max dimension for performance
 
+// Preset images with names
+const PRESET_IMAGES = [
+  { name: 'Rainbow Mountain', src: '/images/presets/vinicunca-mountain.jpg' },
+  { name: 'Dragon Trees', src: '/images/presets/socotra-island.jpg' },
+  { name: 'Chocolate Hills', src: '/images/presets/chocolate-hills.jpg' },
+  { name: 'Horseshoe Bend', src: '/images/presets/horseshoe-bend.webp' },
+  { name: 'Mountain Lake', src: '/images/presets/mountain-reflection.jpg' },
+];
+
+const DEFAULT_PRESET_INDEX = 0; // Rainbow Mountain as default
+
 const ImageUpload = ({ onImageLoad, currentImage }: ImageUploadProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [preview, setPreview] = useState<string | null>(null);
+  const [preview, setPreview] = useState<string | null>(PRESET_IMAGES[DEFAULT_PRESET_INDEX].src);
   const [isLoading, setIsLoading] = useState(false);
+  const [selectedPreset, setSelectedPreset] = useState<number>(DEFAULT_PRESET_INDEX);
+  const hasLoadedDefault = useRef(false);
 
   const resizeImage = useCallback((img: HTMLImageElement): HTMLImageElement => {
     // If already small enough, return as-is
@@ -57,6 +70,49 @@ const ImageUpload = ({ onImageLoad, currentImage }: ImageUploadProps) => {
     return resizedImg;
   }, []);
 
+  const loadImage = useCallback((src: string, isPreset: boolean = false, presetIndex?: number) => {
+    setIsLoading(true);
+    setPreview(src);
+    if (isPreset && presetIndex !== undefined) {
+      setSelectedPreset(presetIndex);
+    } else if (!isPreset) {
+      setSelectedPreset(-1);
+    }
+
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    
+    img.onload = () => {
+      const processedImg = resizeImage(img);
+      
+      if (processedImg !== img) {
+        processedImg.onload = () => {
+          onImageLoad(processedImg);
+          setIsLoading(false);
+        };
+      } else {
+        onImageLoad(img);
+        setIsLoading(false);
+      }
+    };
+
+    img.onerror = () => {
+      console.error('Failed to load image');
+      setIsLoading(false);
+      setPreview(null);
+    };
+
+    img.src = src;
+  }, [onImageLoad, resizeImage]);
+
+  // Load default preset on mount
+  useEffect(() => {
+    if (!hasLoadedDefault.current && !currentImage) {
+      hasLoadedDefault.current = true;
+      loadImage(PRESET_IMAGES[DEFAULT_PRESET_INDEX].src, true, DEFAULT_PRESET_INDEX);
+    }
+  }, [loadImage, currentImage]);
+
   const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -67,48 +123,18 @@ const ImageUpload = ({ onImageLoad, currentImage }: ImageUploadProps) => {
       return;
     }
 
-    setIsLoading(true);
-
     try {
-      // Create object URL for preview
       const objectUrl = URL.createObjectURL(file);
-      setPreview(objectUrl);
-
-      // Load image
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      
-      img.onload = () => {
-        // Resize if needed
-        const processedImg = resizeImage(img);
-        
-        // Wait for resized image to load if it's a new image
-        if (processedImg !== img) {
-          processedImg.onload = () => {
-            onImageLoad(processedImg);
-            setIsLoading(false);
-          };
-        } else {
-          onImageLoad(img);
-          setIsLoading(false);
-        }
-      };
-
-      img.onerror = () => {
-        console.error('Failed to load image');
-        setIsLoading(false);
-        setPreview(null);
-      };
-
-      img.src = objectUrl;
+      loadImage(objectUrl, false);
     } catch (err) {
       console.error('Error processing image:', err);
       setIsLoading(false);
     }
-  }, [onImageLoad, resizeImage]);
+  }, [loadImage]);
 
   const handleClear = useCallback(() => {
     setPreview(null);
+    setSelectedPreset(-1);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -116,6 +142,10 @@ const ImageUpload = ({ onImageLoad, currentImage }: ImageUploadProps) => {
 
   const handleClick = () => {
     fileInputRef.current?.click();
+  };
+
+  const handlePresetSelect = (index: number) => {
+    loadImage(PRESET_IMAGES[index].src, true, index);
   };
 
   return (
@@ -144,9 +174,10 @@ const ImageUpload = ({ onImageLoad, currentImage }: ImageUploadProps) => {
         className="hidden"
       />
 
+      {/* Current preview */}
       {preview ? (
         <div 
-          className="relative aspect-square w-full cursor-pointer overflow-hidden rounded border border-phosphor/30 bg-void/50"
+          className="relative aspect-video w-full cursor-pointer overflow-hidden rounded border border-phosphor/30 bg-void/50"
           onClick={handleClick}
         >
           <img
@@ -160,7 +191,7 @@ const ImageUpload = ({ onImageLoad, currentImage }: ImageUploadProps) => {
             </div>
           )}
           <div className="absolute inset-0 flex items-center justify-center bg-void/60 opacity-0 transition-opacity hover:opacity-100">
-            <span className="font-mono text-xs text-phosphor">Change Image</span>
+            <span className="font-mono text-xs text-phosphor">Upload Custom</span>
           </div>
         </div>
       ) : (
@@ -168,25 +199,50 @@ const ImageUpload = ({ onImageLoad, currentImage }: ImageUploadProps) => {
           variant="outline"
           onClick={handleClick}
           disabled={isLoading}
-          className="w-full border-dashed border-phosphor/30 py-8 font-mono hover:border-phosphor hover:bg-card"
+          className="w-full border-dashed border-phosphor/30 py-6 font-mono hover:border-phosphor hover:bg-card"
         >
           <div className="flex flex-col items-center gap-2">
             {isLoading ? (
               <div className="h-6 w-6 animate-spin rounded-full border-2 border-phosphor border-t-transparent" />
             ) : (
               <>
-                <ImageIcon className="h-6 w-6 text-muted-foreground" />
+                <Upload className="h-5 w-5 text-muted-foreground" />
                 <span className="text-xs text-muted-foreground">
-                  Upload Image
-                </span>
-                <span className="text-[10px] text-muted-foreground/60">
-                  JPG, PNG, WebP • Max 1024px
+                  Upload Custom Image
                 </span>
               </>
             )}
           </div>
         </Button>
       )}
+
+      {/* Preset images grid */}
+      <div className="space-y-2">
+        <label className="font-mono text-[10px] text-muted-foreground/60 uppercase">
+          Or choose a preset
+        </label>
+        <div className="grid grid-cols-5 gap-1.5">
+          {PRESET_IMAGES.map((preset, index) => (
+            <button
+              key={preset.name}
+              onClick={() => handlePresetSelect(index)}
+              disabled={isLoading}
+              className={`relative aspect-square overflow-hidden rounded transition-all ${
+                selectedPreset === index 
+                  ? 'ring-2 ring-phosphor ring-offset-1 ring-offset-background' 
+                  : 'opacity-60 hover:opacity-100'
+              }`}
+              title={preset.name}
+            >
+              <img
+                src={preset.src}
+                alt={preset.name}
+                className="h-full w-full object-cover"
+              />
+            </button>
+          ))}
+        </div>
+      </div>
 
       <p className="font-mono text-[10px] text-muted-foreground/60">
         Image will be transformed by the perceptual effects
