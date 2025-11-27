@@ -1,5 +1,6 @@
 /**
- * GLSL Shaders for Coupled Oscillator Simulation
+ * GLSL Shaders for Perceptual Visualizer
+ * Simpler, working foundation with audio reactivity
  */
 
 // Shared vertex shader - fullscreen triangle
@@ -16,17 +17,17 @@ void main() {
 }
 `;
 
-// Oscillator physics update shader
+// Simpler update shader - wave interference with audio
 export const updateShader = `#version 300 es
 precision highp float;
 
-uniform sampler2D u_state;      // Current oscillator phases (in .x)
-uniform sampler2D u_noise;      // Perlin noise texture
-uniform vec2 u_resolution;      // Simulation grid size
+uniform sampler2D u_state;
+uniform sampler2D u_noise;
+uniform vec2 u_resolution;
 uniform float u_time;
 uniform float u_deltaTime;
 
-// Audio reactive uniforms
+// Audio
 uniform float u_bass;
 uniform float u_lowMid;
 uniform float u_mid;
@@ -34,13 +35,13 @@ uniform float u_high;
 uniform float u_energy;
 uniform float u_beatIntensity;
 
-// Parameter uniforms (0-1 mapped to perceptual zones)
-uniform float u_depth;          // Kernel radius
-uniform float u_curvature;      // Log-polar intensity
-uniform float u_turbulence;     // Chaos/order balance
-uniform float u_branching;      // Symmetry/kaleidoscope
-uniform float u_persistence;    // Phase retention
-uniform float u_focus;          // Center weighting
+// Params (0-1, already perceptually mapped)
+uniform float u_depth;
+uniform float u_curvature;
+uniform float u_turbulence;
+uniform float u_branching;
+uniform float u_persistence;
+uniform float u_focus;
 
 in vec2 v_uv;
 out vec4 fragColor;
@@ -48,127 +49,113 @@ out vec4 fragColor;
 #define PI 3.14159265359
 #define TAU 6.28318530718
 
-// Coupling kernel - determines how neighbors influence each other
-float couplingKernel(float dist, float maxDist) {
-  // Mexican hat wavelet style: positive center, negative ring, positive outer
-  float normalized = dist / maxDist;
-  
-  // Inner positive coupling (sync)
-  float inner = exp(-normalized * normalized * 8.0) * 1.0;
-  
-  // Middle negative coupling (anti-sync) 
-  float middle = -exp(-pow(normalized - 0.4, 2.0) * 20.0) * 0.6;
-  
-  // Outer weak positive
-  float outer = exp(-pow(normalized - 0.8, 2.0) * 10.0) * 0.2;
-  
-  return inner + middle + outer;
+// Smooth noise lookup
+float getNoise(vec2 uv, float scale) {
+  return texture(u_noise, uv * scale).x;
 }
 
-// Log-polar transform for tunnel/mandala effects
+// Log-polar for tunnel effect
 vec2 logPolar(vec2 uv, float intensity) {
   vec2 centered = uv - 0.5;
-  float r = length(centered);
+  float r = length(centered) + 0.001;
   float theta = atan(centered.y, centered.x);
+  float logR = log(r * 5.0 + 0.5) * 0.5 + 0.5;
+  return mix(uv, vec2(theta / TAU + 0.5, logR), intensity);
+}
+
+// Kaleidoscope symmetry
+vec2 kaleidoscope(vec2 uv, float segments) {
+  vec2 centered = uv - 0.5;
+  float angle = atan(centered.y, centered.x);
+  float r = length(centered);
   
-  // Mix between cartesian and log-polar
-  float logR = log(r * 10.0 + 1.0) / 3.0;
-  vec2 polar = vec2(theta / TAU + 0.5, logR);
+  float segmentAngle = TAU / segments;
+  angle = mod(angle, segmentAngle);
+  angle = abs(angle - segmentAngle * 0.5);
   
-  return mix(uv, polar, intensity);
+  return vec2(cos(angle), sin(angle)) * r + 0.5;
 }
 
 void main() {
-  vec2 texelSize = 1.0 / u_resolution;
+  // Get previous state
+  vec4 prevState = texture(u_state, v_uv);
+  float prevPhase = prevState.x;
+  float prevEnergy = prevState.y;
   
-  // Apply log-polar if curvature > 0
-  vec2 sampleUV = v_uv;
+  // Transform coordinates based on params
+  vec2 coord = v_uv;
+  
+  // Apply curvature (log-polar tunnel)
   if (u_curvature > 0.01) {
-    sampleUV = logPolar(v_uv, u_curvature * 0.5);
+    coord = logPolar(coord, u_curvature * 0.7);
   }
   
-  // Current phase
-  float phase = texture(u_state, sampleUV).x;
-  
-  // Read noise for organic variation
-  vec4 noiseVal = texture(u_noise, v_uv);
-  float freqNoise = noiseVal.x;
-  float couplingNoise = noiseVal.y;
-  vec2 flowField = (noiseVal.zw - 0.5) * 2.0;
-  
-  // Natural frequency: driven by audio
-  // Bass creates slow, powerful pulses
-  // Highs create shimmer
-  float baseFreq = 0.5 + u_bass * 2.0 + u_high * 0.5;
-  
-  // Perlin modulates frequency spatially
-  float naturalFreq = baseFreq * (0.8 + freqNoise * 0.4);
-  
-  // Add some variation based on position for complexity
-  naturalFreq *= 1.0 + sin(v_uv.x * PI * u_branching * 8.0) * 0.1;
-  naturalFreq *= 1.0 + cos(v_uv.y * PI * u_branching * 8.0) * 0.1;
-  
-  // Kernel radius based on depth parameter
-  float kernelRadius = 3.0 + u_depth * 12.0; // 3-15 pixels
-  int kernelSize = int(kernelRadius);
-  
-  // Coupling strength: energy increases sync, turbulence decreases it
-  float couplingStrength = (0.3 + u_energy * 0.7) * (1.0 - u_turbulence * 0.5);
-  couplingStrength *= (0.8 + couplingNoise * 0.4); // Perlin variation
-  
-  // Sum coupling from neighbors (Kuramoto model)
-  float coupling = 0.0;
-  float totalWeight = 0.0;
-  
-  for (int dy = -kernelSize; dy <= kernelSize; dy++) {
-    for (int dx = -kernelSize; dx <= kernelSize; dx++) {
-      if (dx == 0 && dy == 0) continue;
-      
-      float dist = length(vec2(float(dx), float(dy)));
-      if (dist > kernelRadius) continue;
-      
-      // Get kernel weight
-      float weight = couplingKernel(dist, kernelRadius);
-      
-      // Focus parameter: weight center more
-      float centerDist = length(v_uv - 0.5);
-      weight *= 1.0 + (1.0 - centerDist) * u_focus;
-      
-      // Sample neighbor phase
-      vec2 neighborUV = sampleUV + vec2(float(dx), float(dy)) * texelSize;
-      float neighborPhase = texture(u_state, neighborUV).x;
-      
-      // Kuramoto coupling: sin(neighbor - self)
-      coupling += weight * sin(neighborPhase - phase);
-      totalWeight += abs(weight);
-    }
+  // Apply branching (kaleidoscope symmetry)
+  float segments = 3.0 + u_branching * 9.0; // 3-12 segments
+  if (u_branching > 0.1) {
+    coord = kaleidoscope(coord, segments);
   }
   
-  if (totalWeight > 0.0) {
-    coupling /= totalWeight;
-  }
+  // Center distance for radial effects
+  float dist = length(v_uv - 0.5);
+  float angle = atan(v_uv.y - 0.5, v_uv.x - 0.5);
   
-  // Phase update: dθ/dt = ω + K * coupling
-  float dPhase = naturalFreq + couplingStrength * coupling * 5.0;
+  // Read noise for organic movement
+  vec4 noise = texture(u_noise, v_uv * 2.0);
+  float flowNoise = noise.x;
+  float colorNoise = noise.y;
   
-  // Beat injection: sudden phase push on beat
-  dPhase += u_beatIntensity * 3.0 * (freqNoise - 0.5);
+  // === AUDIO-DRIVEN WAVE GENERATION ===
   
-  // Flow field influence for organic drift
-  dPhase += dot(flowField, v_uv - 0.5) * u_turbulence * 0.5;
+  // Bass creates slow, powerful radial pulses
+  float bassPulse = sin(dist * 8.0 - u_time * 2.0 - u_bass * 4.0) * u_bass;
   
-  // Update phase with persistence (higher = more tracer-like)
-  float newPhase = phase + dPhase * u_deltaTime;
+  // Low-mid creates rotating spiral arms
+  float spiralCount = 3.0 + u_depth * 5.0;
+  float spiral = sin(angle * spiralCount + dist * 10.0 - u_time * 1.5 + u_lowMid * 3.0) * u_lowMid;
   
-  // Wrap to [0, TAU]
+  // Mid frequencies create ripples from center
+  float ripples = sin(dist * (15.0 + u_mid * 20.0) - u_time * 3.0) * u_mid * 0.7;
+  
+  // Highs add shimmer texture
+  float shimmer = sin((coord.x + coord.y) * 50.0 + u_time * 8.0) * u_high * 0.3;
+  
+  // Combine waves - audio drives the mix
+  float wave = bassPulse * 0.5 + spiral * 0.3 + ripples * 0.15 + shimmer * 0.05;
+  
+  // Add noise for organic feel, scaled by turbulence
+  wave += (flowNoise - 0.5) * u_turbulence * 0.3;
+  
+  // Beat injection - sudden brightness on beats
+  float beatPush = u_beatIntensity * (1.0 - dist * 1.5);
+  
+  // === PHASE AND ENERGY CALCULATION ===
+  
+  // Phase accumulates based on audio energy and wave position
+  float phaseSpeed = 0.5 + u_energy * 2.0 + wave * 0.5;
+  float newPhase = prevPhase + phaseSpeed * u_deltaTime;
   newPhase = mod(newPhase, TAU);
   
-  // Store phase and some derived values
-  fragColor = vec4(newPhase, coupling, u_energy, 1.0);
+  // Energy tracks overall visual intensity
+  // Persistence controls how much previous frame bleeds through
+  float targetEnergy = abs(wave) + u_energy * 0.5 + beatPush;
+  float energySmooth = mix(0.1, 0.95, u_persistence); // Higher persistence = more trail
+  float newEnergy = mix(targetEnergy, prevEnergy, energySmooth);
+  
+  // Focus affects center vs periphery energy
+  float focusMask = 1.0 - dist * u_focus * 2.0;
+  focusMask = clamp(focusMask, 0.2, 1.0);
+  newEnergy *= focusMask;
+  
+  // Depth affects overall complexity/density
+  newEnergy *= 0.5 + u_depth * 0.5;
+  
+  // Store: phase, energy, wave value, beat
+  fragColor = vec4(newPhase, newEnergy, wave * 0.5 + 0.5, beatPush);
 }
 `;
 
-// Render shader - converts phase to colors
+// Render shader - converts state to beautiful colors
 export const renderShader = `#version 300 es
 precision highp float;
 
@@ -176,16 +163,16 @@ uniform sampler2D u_state;
 uniform sampler2D u_noise;
 uniform float u_time;
 
-// Audio
 uniform float u_bass;
 uniform float u_energy;
 uniform float u_beatIntensity;
 
-// Params
 uniform float u_curvature;
 uniform float u_persistence;
 uniform float u_focus;
 uniform float u_branching;
+uniform float u_depth;
+uniform float u_turbulence;
 
 in vec2 v_uv;
 out vec4 fragColor;
@@ -193,71 +180,111 @@ out vec4 fragColor;
 #define PI 3.14159265359
 #define TAU 6.28318530718
 
-// HSV to RGB conversion
+// Attempt: Attempt to apply curvature (log-polar tunnel)
+vec2 logPolar(vec2 uv, float intensity) {
+  vec2 centered = uv - 0.5;
+  float r = length(centered) + 0.001;
+  float theta = atan(centered.y, centered.x);
+  float logR = log(r * 5.0 + 0.5) * 0.5 + 0.5;
+  return mix(uv, vec2(theta / TAU + 0.5, logR), intensity);
+}
+
+// Attempt: Kaleidoscope symmetry
+vec2 kaleidoscope(vec2 uv, float segments) {
+  vec2 centered = uv - 0.5;
+  float angle = atan(centered.y, centered.x);
+  float r = length(centered);
+  float segmentAngle = TAU / segments;
+  angle = mod(angle, segmentAngle);
+  angle = abs(angle - segmentAngle * 0.5);
+  return vec2(cos(angle), sin(angle)) * r + 0.5;
+}
+
+// HSV to RGB
 vec3 hsv2rgb(vec3 c) {
   vec4 K = vec4(1.0, 2.0/3.0, 1.0/3.0, 3.0);
   vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
   return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
 }
 
-// Smooth rainbow based on phase
-vec3 phaseToColor(float phase, float coupling, float energy) {
-  // Base hue from phase
-  float hue = phase / TAU;
+// Attempt: Attempt to apply palette
+vec3 palette(float t, float energy, float wave) {
+  // Attempt: Deep, rich colors that shift with the music
+  float hue = t / TAU + wave * 0.2 + u_time * 0.02;
+  hue = fract(hue);
   
-  // Coupling affects saturation - more sync = more saturated
-  float saturation = 0.6 + abs(coupling) * 0.4;
+  // Attempt: Saturation based on energy - more energy = more vivid
+  float sat = 0.6 + energy * 0.4;
   
-  // Energy affects value/brightness
-  float value = 0.5 + energy * 0.5;
+  // Attempt: Value/brightness - energy drives it
+  float val = 0.3 + energy * 0.7;
   
-  return hsv2rgb(vec3(hue, saturation, value));
+  return hsv2rgb(vec3(hue, sat, val));
 }
 
-// Complementary color scheme
-vec3 complementaryColor(float phase, float energy) {
-  float t = phase / TAU;
+// Attempt: Alternative complementary palette
+vec3 complementary(float t, float energy) {
+  // Attempt: Oscillate between deep blue and warm orange
+  vec3 color1 = vec3(0.1, 0.2, 0.6); // Deep blue
+  vec3 color2 = vec3(0.8, 0.4, 0.1); // Warm orange
+  vec3 color3 = vec3(0.6, 0.1, 0.4); // Purple
   
-  // Oscillate between two complementary colors
-  vec3 color1 = vec3(0.1, 0.3, 0.8); // Deep blue
-  vec3 color2 = vec3(0.9, 0.6, 0.2); // Warm orange
+  float blend = sin(t) * 0.5 + 0.5;
+  float blend2 = sin(t * 1.5 + 1.0) * 0.5 + 0.5;
   
-  float blend = sin(t * PI) * 0.5 + 0.5;
   vec3 base = mix(color1, color2, blend);
+  base = mix(base, color3, blend2 * 0.3);
   
-  // Energy brightens
-  return base * (0.6 + energy * 0.4);
+  return base * (0.4 + energy * 0.6);
 }
 
 void main() {
-  vec4 state = texture(u_state, v_uv);
+  // Transform coordinates to match update shader
+  vec2 coord = v_uv;
+  
+  if (u_curvature > 0.01) {
+    coord = logPolar(coord, u_curvature * 0.7);
+  }
+  
+  float segments = 3.0 + u_branching * 9.0;
+  if (u_branching > 0.1) {
+    coord = kaleidoscope(coord, segments);
+  }
+  
+  // Read state
+  vec4 state = texture(u_state, coord);
   float phase = state.x;
-  float coupling = state.y;
-  float energy = state.z;
+  float energy = state.y;
+  float wave = state.z * 2.0 - 1.0; // Unpack from 0-1 to -1 to 1
+  float beat = state.w;
   
   // Get noise for color variation
   vec4 noise = texture(u_noise, v_uv);
   
-  // Base color from phase
-  vec3 color = phaseToColor(phase, coupling, energy);
+  // Generate color
+  vec3 color = palette(phase, energy, wave);
   
-  // Mix in complementary for richness
-  vec3 comp = complementaryColor(phase + noise.x * 0.5, energy);
-  color = mix(color, comp, 0.3);
+  // Mix in complementary colors for richness
+  vec3 comp = complementary(phase + noise.y * 0.5, energy);
+  color = mix(color, comp, 0.3 + u_turbulence * 0.2);
   
-  // Focus vignette
+  // Focus vignette - darken edges
   float dist = length(v_uv - 0.5);
   float vignette = 1.0 - dist * u_focus * 1.5;
   vignette = smoothstep(0.0, 1.0, vignette);
+  vignette = max(vignette, 0.2); // Never go fully black
   
-  // Beat flash
-  color += vec3(1.0) * u_beatIntensity * 0.3;
+  // Beat flash - white flash on strong beats
+  color += vec3(1.0) * beat * 0.4;
   
-  // Persistence glow (previous frame would blend here in full impl)
-  float glow = 1.0 + u_persistence * 0.5;
+  // Persistence glow effect
+  float glow = 1.0 + u_persistence * 0.3;
   
-  // Final color
+  // Apply modifiers
   color *= vignette * glow;
+  
+  // Ensure minimum visibility
+  color = max(color, vec3(0.02));
   
   // Gamma correction
   color = pow(color, vec3(1.0 / 2.2));
@@ -266,7 +293,7 @@ void main() {
 }
 `;
 
-// Simple copy shader for ping-pong
+// Copy shader for initialization
 export const copyShader = `#version 300 es
 precision highp float;
 
