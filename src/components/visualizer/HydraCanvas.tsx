@@ -16,9 +16,54 @@ const HydraCanvas = ({ seed, mode, seafloor, storm, beacon, analyser }: HydraCan
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const hydraRef = useRef<any>(null);
   const animationRef = useRef<number>();
+  const audioLoopRef = useRef<number>();
+  
+  // Live FFT data ref - updated continuously by animation loop
+  const fftRef = useRef<number[]>([0, 0, 0, 0]);
   
   // Strange attractor for organic evolution
   const { smoothedRef } = useStrangeAttractor(seed);
+
+  // Continuous audio analysis loop
+  useEffect(() => {
+    if (!analyser) return;
+
+    const dataArray = new Uint8Array(analyser.frequencyBinCount);
+    
+    const updateAudio = () => {
+      analyser.getByteFrequencyData(dataArray);
+      
+      // Smoothed FFT bands with slight interpolation for less jitter
+      const smooth = 0.3;
+      const prev = fftRef.current;
+      
+      // Sub-bass (20-60Hz) - bin ~4
+      const newBass = dataArray[4] / 255;
+      // Low-mid (200-500Hz) - bin ~24  
+      const newLowMid = dataArray[24] / 255;
+      // Mid (500-2kHz) - bin ~72
+      const newMid = dataArray[72] / 255;
+      // High (2k-8kHz) - bin ~140
+      const newHigh = dataArray[140] / 255;
+      
+      fftRef.current = [
+        prev[0] + (newBass - prev[0]) * smooth,
+        prev[1] + (newLowMid - prev[1]) * smooth,
+        prev[2] + (newMid - prev[2]) * smooth,
+        prev[3] + (newHigh - prev[3]) * smooth,
+      ];
+      
+      audioLoopRef.current = requestAnimationFrame(updateAudio);
+    };
+    
+    audioLoopRef.current = requestAnimationFrame(updateAudio);
+    
+    return () => {
+      if (audioLoopRef.current) {
+        cancelAnimationFrame(audioLoopRef.current);
+      }
+    };
+  }, [analyser]);
 
   useEffect(() => {
     if (!canvasRef.current) return;
@@ -46,6 +91,9 @@ const HydraCanvas = ({ seed, mode, seafloor, storm, beacon, analyser }: HydraCan
     // @ts-ignore - Hydra adds global functions
     const { osc, noise, gradient, shape, o0, time, render } = window;
 
+    // Live FFT getters - read from continuously updated ref
+    const fft = (band: number) => fftRef.current[band] || 0;
+
     // Hyperbolic geometry helpers - perceptual curvature
     const hyperbolicDensity = (baseValue: number, storm: number) => {
       // At low storm: normal spacing
@@ -71,18 +119,6 @@ const HydraCanvas = ({ seed, mode, seafloor, storm, beacon, analyser }: HydraCan
     const getColorShift = () => smoothedRef.current.colorShift;
     const getScaleBreath = () => smoothedRef.current.scaleBreath;
     const getAsymmetryBias = () => smoothedRef.current.asymmetryBias;
-    
-    const fftData = [0, 0, 0, 0];
-    
-    // Update audio data if analyser is available
-    if (analyser) {
-      const dataArray = new Uint8Array(analyser.frequencyBinCount);
-      analyser.getByteFrequencyData(dataArray);
-      fftData[0] = dataArray[4] / 255;
-      fftData[1] = dataArray[24] / 255;
-      fftData[2] = dataArray[72] / 255;
-      fftData[3] = dataArray[140] / 255;
-    }
 
     // 6 VISUAL MODES FROM ORIGINAL CODE
     switch (mode) {
@@ -104,13 +140,13 @@ const HydraCanvas = ({ seed, mode, seafloor, storm, beacon, analyser }: HydraCan
               () => 0.05 + storm * 0.1 + getWobbleAmount() * 0.03,
               0.5
             ),
-            () => hyperbolicWarp(0.15 + getWobbleAmount() * 0.1, storm) * fftData[0]
+            () => hyperbolicWarp(0.15 + getWobbleAmount() * 0.1, storm) * fft(0)
           )
           .rotate(
-            () => time * (0.01 + storm * 0.06 + getRotationDrift() * 0.02) + fftData[1] * 0.4
+            () => time * (0.01 + storm * 0.06 + getRotationDrift() * 0.02) + fft(1) * 0.4
           )
           .scale(
-            () => (1.0 + seafloor * 0.7 + fftData[0] * 0.5) * getScaleBreath(),
+            () => (1.0 + seafloor * 0.7 + fft(0) * 0.5) * getScaleBreath(),
             () => (1.0 + storm * 0.3) * getScaleBreath() + getAsymmetryBias()
           )
           .modulate(
@@ -118,11 +154,11 @@ const HydraCanvas = ({ seed, mode, seafloor, storm, beacon, analyser }: HydraCan
               () => hyperbolicDensity(3, storm),
               () => 0.2 + storm * 0.4 + getWobbleAmount() * 0.15
             ),
-            () => hyperbolicWarp(0.1, storm) * fftData[2]
+            () => hyperbolicWarp(0.1, storm) * fft(2)
           )
           .contrast(() => 1 + seafloor * 1.0)
           .brightness(
-            () => -0.2 + seafloor * 0.4 + beacon * 0.6 + fftData[3] * 0.3
+            () => -0.2 + seafloor * 0.4 + beacon * 0.6 + fft(3) * 0.3
           )
           .out(o0);
         break;
@@ -150,11 +186,11 @@ const HydraCanvas = ({ seed, mode, seafloor, storm, beacon, analyser }: HydraCan
             .add(
               osc(
                 () => hyperbolicDensity(24 + 20 * storm, storm * 0.6),
-                () => 0.08 + 0.25 * fftData[0] + getWobbleAmount() * 0.04,
+                () => 0.08 + 0.25 * fft(0) + getWobbleAmount() * 0.04,
                 0
               )
                 .thresh(thresh1, 0)
-                .rotate(() => Math.PI / 4 + 0.4 * fftData[1] + storm * 0.3 + getRotationDrift() * 0.15)
+                .rotate(() => Math.PI / 4 + 0.4 * fft(1) + storm * 0.3 + getRotationDrift() * 0.15)
                 .color(1, () => getColorShift() * 0.2, 0)
                 .modulateScale(
                   osc(
@@ -168,11 +204,11 @@ const HydraCanvas = ({ seed, mode, seafloor, storm, beacon, analyser }: HydraCan
             .diff(
               osc(
                 () => hyperbolicDensity(24 + 20 * storm, storm * 0.6),
-                () => 0.06 + 0.25 * fftData[2] + getWobbleAmount() * 0.04,
+                () => 0.06 + 0.25 * fft(2) + getWobbleAmount() * 0.04,
                 0
               )
                 .thresh(thresh2, 0)
-                .rotate(() => Math.PI / 2 + 0.5 * fftData[3] + storm * 0.2 + getRotationDrift() * 0.1)
+                .rotate(() => Math.PI / 2 + 0.5 * fft(3) + storm * 0.2 + getRotationDrift() * 0.1)
                 .color(1, () => getColorShift() * 0.15, 1)
                 .modulateScale(
                   osc(
@@ -186,7 +222,7 @@ const HydraCanvas = ({ seed, mode, seafloor, storm, beacon, analyser }: HydraCan
             .modulateRotate(
               osc(
                 () => hyperbolicDensity(54 + 20 * storm, storm * 0.5),
-                () => -0.005 - 0.01 * fftData[1] + getRotationDrift() * 0.01,
+                () => -0.005 - 0.01 * fft(1) + getRotationDrift() * 0.01,
                 0
               ).thresh(thresh3, 0),
               () => hyperbolicWarp(0.2 + getWobbleAmount() * 0.1, storm * 1.2)
@@ -194,7 +230,7 @@ const HydraCanvas = ({ seed, mode, seafloor, storm, beacon, analyser }: HydraCan
             .modulateScale(
               osc(
                 () => hyperbolicDensity(44 + 30 * seafloor, storm * 0.4),
-                () => -0.02 - 0.02 * fftData[0],
+                () => -0.02 - 0.02 * fft(0),
                 0
               ).thresh(thresh3, 0),
               () => hyperbolicWarp(1.0 + 1.5 * seafloor, storm * 0.2)
@@ -236,12 +272,12 @@ const HydraCanvas = ({ seed, mode, seafloor, storm, beacon, analyser }: HydraCan
               () => hyperbolicDensity(4, storm),
               () => 0.25 + getWobbleAmount() * 0.1
             ),
-            () => hyperbolicWarp(fftData[0] * 0.7 + getWobbleAmount() * 0.15, storm * 0.5)
+            () => hyperbolicWarp(fft(0) * 0.7 + getWobbleAmount() * 0.15, storm * 0.5)
           )
-          .rotate(() => time * (0.05 + getRotationDrift() * 0.02) + fftData[2] * 0.4)
+          .rotate(() => time * (0.05 + getRotationDrift() * 0.02) + fft(2) * 0.4)
           .scale(
-            () => (1.0 + fftData[1] * 0.2 + seafloor * 0.3) * getScaleBreath(),
-            () => (1.0 + fftData[1] * 0.2 + seafloor * 0.3 + storm * 0.2) * getScaleBreath() + getAsymmetryBias()
+            () => (1.0 + fft(1) * 0.2 + seafloor * 0.3) * getScaleBreath(),
+            () => (1.0 + fft(1) * 0.2 + seafloor * 0.3 + storm * 0.2) * getScaleBreath() + getAsymmetryBias()
           )
           .out(o0);
         break;
@@ -263,16 +299,16 @@ const HydraCanvas = ({ seed, mode, seafloor, storm, beacon, analyser }: HydraCan
           pattern()
             .scrollX(
               () => hyperbolicWarp(0.1 + 0.6 * storm + getWobbleAmount() * 0.1, storm * 0.4),
-              () => 0.01 + 0.05 * (fftData[0] + fftData[1]) + getRotationDrift() * 0.02
+              () => 0.01 + 0.05 * (fft(0) + fft(1)) + getRotationDrift() * 0.02
             )
             .scrollY(
-              () => (fftData[2] - 0.5) * 0.3 * (0.2 + storm) * (1 + storm * 0.5) + getAsymmetryBias() * 0.3,
-              () => 0.01 + 0.05 * fftData[3] + getRotationDrift() * 0.015
+              () => (fft(2) - 0.5) * 0.3 * (0.2 + storm) * (1 + storm * 0.5) + getAsymmetryBias() * 0.3,
+              () => 0.01 + 0.05 * fft(3) + getRotationDrift() * 0.015
             )
             .mult(
               pattern()
                 .contrast(() => 1.0 + 1.5 * beacon + getWobbleAmount() * 0.2)
-                .brightness(() => -0.2 + 0.6 * beacon + 0.3 * fftData[3] + getColorShift() * 0.1)
+                .brightness(() => -0.2 + 0.6 * beacon + 0.3 * fft(3) + getColorShift() * 0.1)
             )
             .modulate(
               noise(
@@ -305,37 +341,37 @@ const HydraCanvas = ({ seed, mode, seafloor, storm, beacon, analyser }: HydraCan
               () => 0.06 + 0.12 * storm + getRotationDrift() * 0.03,
               0.6
             ).kaleid(() => hyperbolicBranching(3 + Math.round(5 * beacon), storm)),
-            () => hyperbolicWarp(0.1 + (fftData[0] + fftData[1]) * 0.4 + getWobbleAmount() * 0.1, storm * 0.6)
+            () => hyperbolicWarp(0.1 + (fft(0) + fft(1)) * 0.4 + getWobbleAmount() * 0.1, storm * 0.6)
           )
           .rotate(
-            () => time * (0.01 + 0.03 * storm + getRotationDrift() * 0.015) + fftData[1] * 0.25
+            () => time * (0.01 + 0.03 * storm + getRotationDrift() * 0.015) + fft(1) * 0.25
           )
           .scale(
             () => (1.0 + storm * 0.3) * getScaleBreath(),
             () => (1.0 + storm * 0.4) * getScaleBreath() + getAsymmetryBias()
           )
-          .brightness(() => 0.05 + fftData[2] * 0.35)
+          .brightness(() => 0.05 + fft(2) * 0.35)
           .out(o0);
         break;
 
       case 6: // TIDE - Hyperbolic wave complex with organic evolution
         osc(
           () => hyperbolicDensity(150 + 150 * storm, storm * 0.7),
-          () => 0.04 + 0.18 * fftData[0] + getRotationDrift() * 0.04,
+          () => 0.04 + 0.18 * fft(0) + getRotationDrift() * 0.04,
           () => 1.2 + 1.5 * beacon + getColorShift() * 0.3
         )
           .modulate(
             osc(
               () => hyperbolicDensity(1 + 3 * storm, storm * 0.5),
               () => -0.1 - 0.3 * seafloor + getWobbleAmount() * 0.05,
-              () => 60 + 60 * fftData[1]
+              () => 60 + 60 * fft(1)
             ).rotate(() => 10 + 10 * beacon + getRotationDrift() * 2),
             () => hyperbolicWarp(0.05 + getWobbleAmount() * 0.03, storm * 0.8)
           )
           .mult(
             osc(
               () => hyperbolicDensity(150 + 150 * storm, storm * 0.6),
-              () => -0.05 - 0.2 * fftData[2] + getRotationDrift() * 0.03,
+              () => -0.05 - 0.2 * fft(2) + getRotationDrift() * 0.03,
               2
             ).pixelate(
               () => Math.max(8, 20 + 80 * (1 - seafloor) - storm * 25),
@@ -350,14 +386,14 @@ const HydraCanvas = ({ seed, mode, seafloor, storm, beacon, analyser }: HydraCan
           .modulate(
             osc(
               () => hyperbolicDensity(3 + 5 * storm, storm * 0.5),
-              () => -0.05 - 0.08 * fftData[0] + getWobbleAmount() * 0.02
+              () => -0.05 - 0.08 * fft(0) + getWobbleAmount() * 0.02
             ).rotate(() => 5 + 10 * beacon + getRotationDrift() * 1.5),
             () => hyperbolicWarp(0.03 + getWobbleAmount() * 0.02, storm * 0.9)
           )
           .add(
             osc(
               () => hyperbolicDensity(6 + 6 * storm, storm * 0.4),
-              () => -0.4 - 0.4 * fftData[1] + getRotationDrift() * 0.06,
+              () => -0.4 - 0.4 * fft(1) + getRotationDrift() * 0.06,
               () => 400 + 400 * seafloor
             ).color(
               () => 1 + getColorShift() * 0.1,
@@ -379,7 +415,7 @@ const HydraCanvas = ({ seed, mode, seafloor, storm, beacon, analyser }: HydraCan
           .modulate(
             osc(
               () => hyperbolicDensity(4 + 10 * storm, storm * 0.6),
-              () => -0.1 - 0.2 * fftData[3] + getRotationDrift() * 0.03,
+              () => -0.1 - 0.2 * fft(3) + getRotationDrift() * 0.03,
               () => 400 + 400 * beacon
             ).rotate(() => 3 + 6 * storm + getRotationDrift() * 0.5),
             () => hyperbolicWarp(0.04 + getWobbleAmount() * 0.02, storm * 1.0)
@@ -387,7 +423,7 @@ const HydraCanvas = ({ seed, mode, seafloor, storm, beacon, analyser }: HydraCan
           .add(
             osc(
               () => hyperbolicDensity(2 + 6 * storm, storm * 0.3),
-              () => 0.4 + 1.0 * fftData[0] + getWobbleAmount() * 0.1,
+              () => 0.4 + 1.0 * fft(0) + getWobbleAmount() * 0.1,
               () => 80 + 60 * seafloor
             ).color(
               () => 0.2 + getColorShift() * 0.1,
