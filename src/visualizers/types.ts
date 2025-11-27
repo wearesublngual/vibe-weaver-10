@@ -1,73 +1,102 @@
 /**
- * Visualizer Engine Interface
- * All visualizers implement this for extensibility
+ * Visualizer Types - Perceptual Effect Model
+ * 
+ * Based on DMT phenomenology progression:
+ * - DOSE controls overall intensity/transformation depth
+ * - 5 effects control specific perceptual dimensions
  */
 
 export interface AudioData {
-  // Frequency bands (0-1 normalized)
-  bass: number;      // 20-150 Hz - kicks, sub bass
-  lowMid: number;    // 150-500 Hz - bass guitar, low synths
-  mid: number;       // 500-2000 Hz - vocals, leads
-  high: number;      // 2000-8000 Hz - hi-hats, air
-  
-  // Derived values
-  energy: number;    // Overall energy (0-1)
-  beatDetected: boolean;  // True on kick/snare hits
-  beatIntensity: number;  // How strong the beat (0-1)
+  bass: number;        // 20-150Hz - kick drums, sub bass
+  lowMid: number;      // 150-500Hz - bass guitar, low vocals
+  mid: number;         // 500-2000Hz - vocals, guitars
+  high: number;        // 2000-8000Hz - cymbals, brightness
+  energy: number;      // Overall loudness (RMS)
+  beatIntensity: number; // Beat detection strength
+  beatDetected?: boolean; // Backwards compatibility
 }
 
+// New perceptual effect model
 export interface VisualizerParams {
-  // 6 core sliders (0-1 normalized)
-  depth: number;       // Coupling kernel radius / density
-  curvature: number;   // Euclidean to hyperbolic transform
-  turbulence: number;  // Order to chaos
-  branching: number;   // Pattern multiplication factor
-  persistence: number; // Tracer / echo effect
-  focus: number;       // Center attention / vignette
-}
-
-export interface VisualizerEngine {
-  // Lifecycle
-  init(canvas: HTMLCanvasElement): Promise<void>;
-  dispose(): void;
+  // Master intensity - controls how much the image transforms
+  dose: number;        // 0-1: subtle enhancement → full transformation
   
-  // Per-frame update
-  update(audio: AudioData, params: VisualizerParams, deltaTime: number): void;
-  render(): void;
-  
-  // State
-  isInitialized(): boolean;
-  getName(): string;
+  // 5 Perceptual effect dimensions
+  symmetry: number;    // 0-1: none → kaleidoscopic/hyperbolic tiling
+  recursion: number;   // 0-1: flat → self-similar fractal depth
+  breathing: number;   // 0-1: still → pulsing/oscillating
+  flow: number;        // 0-1: static → flowing/warping motion
+  saturation: number;  // 0-1: muted → vivid color shifting
 }
 
-export interface VisualizerConfig {
-  width: number;
-  height: number;
-  simulationScale: number; // e.g., 0.25 for 1/4 resolution
-}
-
-// Default params for initialization
 export const DEFAULT_PARAMS: VisualizerParams = {
-  depth: 0.5,
-  curvature: 0.3,
-  turbulence: 0.4,
-  branching: 0.5,
-  persistence: 0.3,
-  focus: 0.5,
+  dose: 0.3,
+  symmetry: 0.2,
+  recursion: 0.15,
+  breathing: 0.4,
+  flow: 0.3,
+  saturation: 0.5,
 };
 
-// Perceptual zone mapping (from our existing system)
+// Slider configuration for UI
+export interface SliderConfig {
+  key: keyof VisualizerParams;
+  label: string;
+  description: string;
+}
+
+export const EFFECT_SLIDERS: SliderConfig[] = [
+  { 
+    key: 'dose', 
+    label: 'DOSE', 
+    description: 'Overall transformation intensity'
+  },
+  { 
+    key: 'symmetry', 
+    label: 'SYMMETRY', 
+    description: 'Kaleidoscopic tiling patterns'
+  },
+  { 
+    key: 'recursion', 
+    label: 'RECURSION', 
+    description: 'Self-similar fractal depth'
+  },
+  { 
+    key: 'breathing', 
+    label: 'BREATHING', 
+    description: 'Pulsing oscillation amplitude'
+  },
+  { 
+    key: 'flow', 
+    label: 'FLOW', 
+    description: 'Directional warping motion'
+  },
+  { 
+    key: 'saturation', 
+    label: 'SATURATION', 
+    description: 'Color intensity and shifting'
+  },
+];
+
+export interface VisualizerEngine {
+  init(canvas: HTMLCanvasElement): Promise<void>;
+  update(audio: AudioData, params: VisualizerParams, deltaTime: number): void;
+  render(): void;
+  dispose(): void;
+  isInitialized(): boolean;
+  getName(): string;
+  setImage?(imageData: ImageData | HTMLImageElement | HTMLCanvasElement): void;
+}
+
+// Perceptual zone mapping (nonlinear for better control)
 export function mapToPerceptualZone(linear: number): number {
   if (linear <= 0.4) {
-    // Subtle zone: gentle, compressed
     const t = linear / 0.4;
     return t * t * (3 - 2 * t) * 0.2;
   } else if (linear <= 0.8) {
-    // Expressive zone: sweet spot
     const t = (linear - 0.4) / 0.4;
     return 0.2 + t * t * (3 - 2 * t) * 0.5;
   } else {
-    // Experimental zone: careful expansion
     const t = (linear - 0.8) / 0.2;
     return 0.7 + t * t * (3 - 2 * t) * 0.3;
   }

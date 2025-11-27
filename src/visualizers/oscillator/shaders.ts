@@ -1,6 +1,13 @@
 /**
  * GLSL Shaders for Perceptual Audio-Reactive Visualizer
- * Key insight: Map audio to VELOCITY not just position
+ * 
+ * Uses DOSE + 5 effects model:
+ * - DOSE: master intensity
+ * - SYMMETRY: kaleidoscopic tiling
+ * - RECURSION: fractal depth
+ * - BREATHING: pulsing oscillation
+ * - FLOW: warping motion  
+ * - SATURATION: color intensity
  */
 
 export const vertexShader = `#version 300 es
@@ -15,7 +22,7 @@ void main() {
 }
 `;
 
-// Update shader - physics-based with audio driving forces
+// Update shader - physics simulation
 export const updateShader = `#version 300 es
 precision highp float;
 
@@ -25,7 +32,7 @@ uniform vec2 u_resolution;
 uniform float u_time;
 uniform float u_deltaTime;
 
-// Audio - these drive the FORCES, not positions
+// Audio
 uniform float u_bass;
 uniform float u_lowMid;
 uniform float u_mid;
@@ -33,13 +40,13 @@ uniform float u_high;
 uniform float u_energy;
 uniform float u_beatIntensity;
 
-// Params
-uniform float u_depth;
-uniform float u_curvature;
-uniform float u_turbulence;
-uniform float u_branching;
-uniform float u_persistence;
-uniform float u_focus;
+// Params - new names
+uniform float u_dose;
+uniform float u_symmetry;
+uniform float u_recursion;
+uniform float u_breathing;
+uniform float u_flow;
+uniform float u_saturation;
 
 in vec2 v_uv;
 out vec4 fragColor;
@@ -47,7 +54,6 @@ out vec4 fragColor;
 #define PI 3.14159265359
 #define TAU 6.28318530718
 
-// Log-polar for tunnel effect
 vec2 logPolar(vec2 uv, float intensity) {
   vec2 centered = uv - 0.5;
   float r = length(centered) + 0.001;
@@ -56,7 +62,6 @@ vec2 logPolar(vec2 uv, float intensity) {
   return mix(uv, vec2(theta / TAU + 0.5, logR), intensity);
 }
 
-// Kaleidoscope
 vec2 kaleidoscope(vec2 uv, float segments) {
   vec2 centered = uv - 0.5;
   float angle = atan(centered.y, centered.x);
@@ -70,94 +75,69 @@ vec2 kaleidoscope(vec2 uv, float segments) {
 void main() {
   vec4 prevState = texture(u_state, v_uv);
   float phase = prevState.x;
-  float velocity = prevState.y; // Track velocity, not just position!
+  float velocity = prevState.y;
   float accumulatedEnergy = prevState.z;
   float prevBeat = prevState.w;
   
-  // Coordinate transforms
+  // Coordinate transforms based on effects
   vec2 coord = v_uv;
-  if (u_curvature > 0.01) {
-    coord = logPolar(coord, u_curvature * 0.8);
+  if (u_recursion * u_dose > 0.01) {
+    coord = logPolar(coord, u_recursion * u_dose * 0.8);
   }
   
-  float segments = 3.0 + u_branching * 9.0;
-  if (u_branching > 0.1) {
+  float segments = 3.0 + u_symmetry * u_dose * 9.0;
+  if (u_symmetry * u_dose > 0.1) {
     coord = kaleidoscope(coord, segments);
   }
   
-  // Spatial info
   float dist = length(v_uv - 0.5);
   float angle = atan(v_uv.y - 0.5, v_uv.x - 0.5);
   
-  // Noise for organic feel
   vec4 noise = texture(u_noise, v_uv * 2.0 + u_time * 0.01);
   
-  // === AUDIO-DRIVEN FORCES ===
-  // Key insight: Audio drives ACCELERATION, which affects velocity, which affects position
-  // This creates physics-based motion that "feels" the music
+  // Audio-driven forces scaled by dose
+  float bassForce = u_bass * u_bass * 3.0 * u_dose;
+  float radialPush = bassForce * (1.0 - dist * 2.0);
   
-  // Bass creates radial force (push outward from center on kick)
-  float bassForce = u_bass * u_bass * 3.0; // Square for punch
-  float radialPush = bassForce * (1.0 - dist * 2.0); // Stronger at center
+  float rotationalForce = u_lowMid * 2.0 * u_flow;
   
-  // Low-mid creates rotational force
-  float rotationalForce = u_lowMid * 2.0;
-  
-  // Mid creates ripple force
   float ripplePhase = dist * 15.0 - u_time * 2.0;
-  float rippleForce = sin(ripplePhase) * u_mid * 1.5;
+  float rippleForce = sin(ripplePhase) * u_mid * 1.5 * u_breathing;
   
-  // High creates shimmer (high frequency oscillation)
   float shimmerForce = sin(u_time * 20.0 + (coord.x + coord.y) * 30.0) * u_high * 0.5;
   
-  // Beat creates impulse force
-  float beatImpulse = u_beatIntensity * u_beatIntensity * 5.0; // Square for punch
-  beatImpulse *= (1.0 - dist * 1.5); // Centered
+  float beatImpulse = u_beatIntensity * u_beatIntensity * 5.0 * u_dose;
+  beatImpulse *= (1.0 - dist * 1.5);
   
-  // Combine forces
   float totalForce = radialPush + rotationalForce * 0.5 + rippleForce + shimmerForce + beatImpulse;
+  totalForce += (noise.x - 0.5) * u_flow * 0.5;
   
-  // Add noise-based turbulence
-  totalForce += (noise.x - 0.5) * u_turbulence * 0.5;
-  
-  // === PHYSICS UPDATE ===
-  
-  // Acceleration from forces
+  // Physics update
   float acceleration = totalForce * (0.5 + u_energy);
-  
-  // Update velocity with damping (persistence controls damping)
-  float damping = 0.85 + u_persistence * 0.14; // 0.85-0.99
+  float damping = 0.85 + u_breathing * 0.14;
   velocity = velocity * damping + acceleration * u_deltaTime;
-  
-  // Clamp velocity to prevent instability
   velocity = clamp(velocity, -3.0, 3.0);
   
-  // Update phase based on velocity (velocity -> position change)
   float baseSpeed = 0.3 + u_energy * 0.5;
   phase += (baseSpeed + velocity) * u_deltaTime;
   phase = mod(phase, TAU);
   
-  // Accumulated energy for color intensity
   float targetEnergy = u_energy * 0.7 + abs(velocity) * 0.3;
-  float energySmooth = 0.9 + u_persistence * 0.09;
+  float energySmooth = 0.9 + u_breathing * 0.09;
   accumulatedEnergy = mix(targetEnergy, accumulatedEnergy, energySmooth);
   
-  // Focus: reduce energy at edges
-  float focusMask = 1.0 - dist * u_focus * 1.8;
+  float focusMask = 1.0 - dist * u_dose * 1.8;
   focusMask = max(focusMask, 0.15);
   accumulatedEnergy *= focusMask;
+  accumulatedEnergy *= 0.6 + u_dose * 0.4;
   
-  // Depth affects overall complexity
-  accumulatedEnergy *= 0.6 + u_depth * 0.4;
-  
-  // Beat pulse (decaying)
   float newBeat = max(u_beatIntensity, prevBeat * 0.85);
   
   fragColor = vec4(phase, velocity, accumulatedEnergy, newBeat);
 }
 `;
 
-// Render shader - beautiful colors from physics state
+// Render shader - beautiful visualization from state
 export const renderShader = `#version 300 es
 precision highp float;
 
@@ -166,15 +146,18 @@ uniform sampler2D u_noise;
 uniform float u_time;
 
 uniform float u_bass;
+uniform float u_lowMid;
+uniform float u_mid;
+uniform float u_high;
 uniform float u_energy;
 uniform float u_beatIntensity;
 
-uniform float u_depth;
-uniform float u_curvature;
-uniform float u_turbulence;
-uniform float u_branching;
-uniform float u_persistence;
-uniform float u_focus;
+uniform float u_dose;
+uniform float u_symmetry;
+uniform float u_recursion;
+uniform float u_breathing;
+uniform float u_flow;
+uniform float u_saturation;
 
 in vec2 v_uv;
 out vec4 fragColor;
@@ -206,54 +189,67 @@ vec3 hsv2rgb(vec3 c) {
   return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
 }
 
-// Attempt: Attempt to apply palette based on velocity
-vec3 velocityPalette(float phase, float velocity, float energy) {
-  // Velocity affects hue - positive = warm, negative = cool
+vec3 velocityPalette(float phase, float velocity, float energy, float satMod) {
   float hueShift = velocity * 0.15;
   float hue = phase / TAU + hueShift + u_time * 0.01;
   hue = fract(hue);
   
-  // Energy affects saturation - more energy = more vivid
   float sat = 0.5 + energy * 0.5;
+  sat *= (0.5 + satMod * 0.5);
   
-  // Absolute velocity affects brightness - motion = light
   float val = 0.25 + energy * 0.5 + abs(velocity) * 0.2;
   val = min(val, 1.0);
   
   return hsv2rgb(vec3(hue, sat, val));
 }
 
-// Rich complementary palette
 vec3 richPalette(float t, float velocity, float energy) {
-  // Base colors that shift with time and velocity
-  vec3 deep = vec3(0.08, 0.12, 0.35);   // Deep blue
-  vec3 warm = vec3(0.85, 0.35, 0.15);    // Warm orange
-  vec3 accent = vec3(0.6, 0.1, 0.5);     // Purple accent
-  vec3 highlight = vec3(0.2, 0.8, 0.7);  // Cyan highlight
+  vec3 deep = vec3(0.08, 0.12, 0.35);
+  vec3 warm = vec3(0.85, 0.35, 0.15);
+  vec3 accent = vec3(0.6, 0.1, 0.5);
+  vec3 highlight = vec3(0.2, 0.8, 0.7);
   
   float blend1 = sin(t * PI) * 0.5 + 0.5;
   float blend2 = sin(t * PI * 0.7 + velocity) * 0.5 + 0.5;
   
   vec3 base = mix(deep, warm, blend1);
   base = mix(base, accent, blend2 * 0.4);
-  
-  // Velocity shifts toward highlight colors
   base = mix(base, highlight, abs(velocity) * 0.3);
   
-  // Energy intensifies
   return base * (0.3 + energy * 0.7);
 }
 
 void main() {
   vec2 coord = v_uv;
   
-  if (u_curvature > 0.01) {
-    coord = logPolar(coord, u_curvature * 0.8);
+  // Apply coordinate transforms
+  if (u_recursion * u_dose > 0.01) {
+    coord = logPolar(coord, u_recursion * u_dose * 0.8);
   }
   
-  float segments = 3.0 + u_branching * 9.0;
-  if (u_branching > 0.1) {
+  float segments = 3.0 + u_symmetry * u_dose * 9.0;
+  if (u_symmetry * u_dose > 0.1) {
     coord = kaleidoscope(coord, segments);
+  }
+  
+  // Breathing distortion
+  if (u_breathing * u_dose > 0.01) {
+    vec2 centered = coord - 0.5;
+    float r = length(centered);
+    float breathPhase = u_time * 2.0 + u_bass * 3.0;
+    float breathWave = sin(r * 8.0 - breathPhase) * 0.5 + 0.5;
+    float scale = 1.0 + breathWave * u_breathing * u_dose * 0.1;
+    coord = centered * scale + 0.5;
+  }
+  
+  // Flow distortion
+  if (u_flow * u_dose > 0.01) {
+    vec4 n = texture(u_noise, coord * 0.5 + u_time * 0.02);
+    vec2 flow = vec2(
+      sin((n.x - 0.5) * TAU + u_time * 0.3),
+      cos((n.y - 0.5) * TAU + u_time * 0.25)
+    );
+    coord += flow * u_flow * u_dose * 0.05;
   }
   
   vec4 state = texture(u_state, coord);
@@ -265,35 +261,29 @@ void main() {
   vec4 noise = texture(u_noise, v_uv);
   
   // Color from velocity-aware palette
-  vec3 color = velocityPalette(phase, velocity, energy);
+  vec3 color = velocityPalette(phase, velocity, energy, u_saturation);
   
   // Blend with rich palette
   vec3 rich = richPalette(phase, velocity, energy);
-  color = mix(color, rich, 0.4 + u_turbulence * 0.3);
+  color = mix(color, rich, 0.4 + u_saturation * 0.3);
   
-  // Add subtle noise variation
-  color += (noise.xyz - 0.5) * 0.05 * u_turbulence;
+  // Noise variation
+  color += (noise.xyz - 0.5) * 0.05 * u_flow;
   
-  // Focus vignette
+  // Vignette
   float dist = length(v_uv - 0.5);
-  float vignette = 1.0 - dist * u_focus * 1.4;
+  float vignette = 1.0 - dist * u_dose * 1.4;
   vignette = smoothstep(0.0, 1.0, vignette);
   vignette = max(vignette, 0.15);
   
-  // Beat flash - white/bright pulse
+  // Beat flash
   vec3 beatColor = vec3(1.0, 0.95, 0.9);
-  color = mix(color, beatColor, beat * 0.5);
+  color = mix(color, beatColor, beat * 0.5 * u_dose);
   
-  // Apply vignette
   color *= vignette;
+  color *= 1.0 + u_breathing * 0.2;
   
-  // Persistence glow
-  color *= 1.0 + u_persistence * 0.2;
-  
-  // Ensure visibility
   color = max(color, vec3(0.015));
-  
-  // Gamma correction
   color = pow(color, vec3(1.0 / 2.2));
   
   fragColor = vec4(color, 1.0);

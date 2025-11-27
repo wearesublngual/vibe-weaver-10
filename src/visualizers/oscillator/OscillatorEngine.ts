@@ -1,9 +1,10 @@
 /**
  * Perceptual Visualizer Engine
  * Audio-reactive with meaningful visual constraints
+ * Uses DOSE + 5 effects model
  */
 
-import { VisualizerEngine, AudioData, VisualizerParams, mapToPerceptualZone } from '../types';
+import { VisualizerEngine, AudioData, VisualizerParams, DEFAULT_PARAMS, mapToPerceptualZone } from '../types';
 import { createProgramFromSources, createFramebuffer, createFullscreenQuad, getUniformLocations, Framebuffer } from '../utils/webgl-utils';
 import { generateNoiseTexture, initPerlin } from '../utils/perlin';
 import { vertexShader, updateShader, renderShader } from './shaders';
@@ -42,10 +43,7 @@ export class OscillatorEngine implements VisualizerEngine {
     bass: 0.1, lowMid: 0.1, mid: 0.1, high: 0.05, 
     energy: 0.1, beatDetected: false, beatIntensity: 0 
   };
-  private lastParams: VisualizerParams = { 
-    depth: 0.5, curvature: 0.3, turbulence: 0.4, 
-    branching: 0.5, persistence: 0.3, focus: 0.5 
-  };
+  private lastParams: VisualizerParams = DEFAULT_PARAMS;
   
   constructor(private seed: string = 'default') {
     const seedNum = this.stringToSeed(seed);
@@ -95,17 +93,17 @@ export class OscillatorEngine implements VisualizerEngine {
       throw new Error('Shader compilation failed');
     }
     
-    // Get uniform locations
+    // Get uniform locations - new param names
     const updateUniformNames = [
       'u_state', 'u_noise', 'u_resolution', 'u_time', 'u_deltaTime',
       'u_bass', 'u_lowMid', 'u_mid', 'u_high', 'u_energy', 'u_beatIntensity',
-      'u_depth', 'u_curvature', 'u_turbulence', 'u_branching', 'u_persistence', 'u_focus'
+      'u_dose', 'u_symmetry', 'u_recursion', 'u_breathing', 'u_flow', 'u_saturation'
     ];
     
     const renderUniformNames = [
-      'u_state', 'u_noise', 'u_time',
-      'u_bass', 'u_energy', 'u_beatIntensity',
-      'u_depth', 'u_curvature', 'u_turbulence', 'u_branching', 'u_persistence', 'u_focus'
+      'u_state', 'u_noise', 'u_image', 'u_time', 'u_resolution',
+      'u_bass', 'u_lowMid', 'u_mid', 'u_high', 'u_energy', 'u_beatIntensity',
+      'u_dose', 'u_symmetry', 'u_recursion', 'u_breathing', 'u_flow', 'u_saturation'
     ];
     
     this.updateUniforms = getUniformLocations(gl, this.updateProgram, updateUniformNames);
@@ -123,13 +121,11 @@ export class OscillatorEngine implements VisualizerEngine {
     this.stateBuffers[0] = createFramebuffer(gl, this.simWidth, this.simHeight, format);
     
     if (!this.stateBuffers[0]) {
-      // Fallback to RGBA16F
       format = gl.RGBA16F;
       this.stateBuffers[0] = createFramebuffer(gl, this.simWidth, this.simHeight, format);
     }
     
     if (!this.stateBuffers[0]) {
-      // Last resort - RGBA8
       console.warn('Using RGBA8 fallback');
       this.stateBuffers[0] = this.createRGBA8Framebuffer(gl, this.simWidth, this.simHeight);
     }
@@ -177,7 +173,6 @@ export class OscillatorEngine implements VisualizerEngine {
   private initializeState(): void {
     const gl = this.gl!;
     
-    // Initialize with some variation
     const data = new Float32Array(this.simWidth * this.simHeight * 4);
     
     for (let y = 0; y < this.simHeight; y++) {
@@ -224,9 +219,8 @@ export class OscillatorEngine implements VisualizerEngine {
   private updateNoiseTexture(): void {
     const gl = this.gl!;
     
-    this.noiseTime += 0.005; // Slow drift
+    this.noiseTime += 0.005;
     
-    // Update less frequently
     if (Math.floor(this.noiseTime * 10) > Math.floor((this.noiseTime - 0.005) * 10)) {
       const noiseData = generateNoiseTexture(this.simWidth, this.simHeight, 4, this.noiseTime);
       gl.bindTexture(gl.TEXTURE_2D, this.noiseTexture);
@@ -259,20 +253,18 @@ export class OscillatorEngine implements VisualizerEngine {
     const gl = this.gl;
     this.time += deltaTime;
     
-    // Store for render
     this.lastAudio = audio;
     this.lastParams = params;
     
-    // Update noise slowly
     this.updateNoiseTexture();
     
-    // Map params through perceptual zones
-    const pDepth = mapToPerceptualZone(params.depth);
-    const pCurvature = mapToPerceptualZone(params.curvature);
-    const pTurbulence = mapToPerceptualZone(params.turbulence);
-    const pBranching = mapToPerceptualZone(params.branching);
-    const pPersistence = mapToPerceptualZone(params.persistence);
-    const pFocus = mapToPerceptualZone(params.focus);
+    // Map params through perceptual zones for nonlinear control
+    const pDose = mapToPerceptualZone(params.dose);
+    const pSymmetry = mapToPerceptualZone(params.symmetry);
+    const pRecursion = mapToPerceptualZone(params.recursion);
+    const pBreathing = mapToPerceptualZone(params.breathing);
+    const pFlow = mapToPerceptualZone(params.flow);
+    const pSaturation = mapToPerceptualZone(params.saturation);
     
     // Get buffers
     const currentState = this.stateBuffers[this.currentBuffer]!;
@@ -306,13 +298,13 @@ export class OscillatorEngine implements VisualizerEngine {
     gl.uniform1f(this.updateUniforms.u_energy, audio.energy);
     gl.uniform1f(this.updateUniforms.u_beatIntensity, audio.beatIntensity);
     
-    // Params
-    gl.uniform1f(this.updateUniforms.u_depth, pDepth);
-    gl.uniform1f(this.updateUniforms.u_curvature, pCurvature);
-    gl.uniform1f(this.updateUniforms.u_turbulence, pTurbulence);
-    gl.uniform1f(this.updateUniforms.u_branching, pBranching);
-    gl.uniform1f(this.updateUniforms.u_persistence, pPersistence);
-    gl.uniform1f(this.updateUniforms.u_focus, pFocus);
+    // Params - new names
+    gl.uniform1f(this.updateUniforms.u_dose, pDose);
+    gl.uniform1f(this.updateUniforms.u_symmetry, pSymmetry);
+    gl.uniform1f(this.updateUniforms.u_recursion, pRecursion);
+    gl.uniform1f(this.updateUniforms.u_breathing, pBreathing);
+    gl.uniform1f(this.updateUniforms.u_flow, pFlow);
+    gl.uniform1f(this.updateUniforms.u_saturation, pSaturation);
     
     this.quad!.draw();
     
@@ -327,12 +319,12 @@ export class OscillatorEngine implements VisualizerEngine {
     const currentState = this.stateBuffers[this.currentBuffer]!;
     
     // Map params
-    const pDepth = mapToPerceptualZone(this.lastParams.depth);
-    const pCurvature = mapToPerceptualZone(this.lastParams.curvature);
-    const pTurbulence = mapToPerceptualZone(this.lastParams.turbulence);
-    const pBranching = mapToPerceptualZone(this.lastParams.branching);
-    const pPersistence = mapToPerceptualZone(this.lastParams.persistence);
-    const pFocus = mapToPerceptualZone(this.lastParams.focus);
+    const pDose = mapToPerceptualZone(this.lastParams.dose);
+    const pSymmetry = mapToPerceptualZone(this.lastParams.symmetry);
+    const pRecursion = mapToPerceptualZone(this.lastParams.recursion);
+    const pBreathing = mapToPerceptualZone(this.lastParams.breathing);
+    const pFlow = mapToPerceptualZone(this.lastParams.flow);
+    const pSaturation = mapToPerceptualZone(this.lastParams.saturation);
     
     // Render to screen
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
@@ -352,14 +344,19 @@ export class OscillatorEngine implements VisualizerEngine {
     // Uniforms
     gl.uniform1f(this.renderUniforms.u_time, this.time);
     gl.uniform1f(this.renderUniforms.u_bass, this.lastAudio.bass);
+    gl.uniform1f(this.renderUniforms.u_lowMid, this.lastAudio.lowMid);
+    gl.uniform1f(this.renderUniforms.u_mid, this.lastAudio.mid);
+    gl.uniform1f(this.renderUniforms.u_high, this.lastAudio.high);
     gl.uniform1f(this.renderUniforms.u_energy, this.lastAudio.energy);
     gl.uniform1f(this.renderUniforms.u_beatIntensity, this.lastAudio.beatIntensity);
-    gl.uniform1f(this.renderUniforms.u_depth, pDepth);
-    gl.uniform1f(this.renderUniforms.u_curvature, pCurvature);
-    gl.uniform1f(this.renderUniforms.u_turbulence, pTurbulence);
-    gl.uniform1f(this.renderUniforms.u_branching, pBranching);
-    gl.uniform1f(this.renderUniforms.u_persistence, pPersistence);
-    gl.uniform1f(this.renderUniforms.u_focus, pFocus);
+    
+    // Params
+    gl.uniform1f(this.renderUniforms.u_dose, pDose);
+    gl.uniform1f(this.renderUniforms.u_symmetry, pSymmetry);
+    gl.uniform1f(this.renderUniforms.u_recursion, pRecursion);
+    gl.uniform1f(this.renderUniforms.u_breathing, pBreathing);
+    gl.uniform1f(this.renderUniforms.u_flow, pFlow);
+    gl.uniform1f(this.renderUniforms.u_saturation, pSaturation);
     
     this.quad!.draw();
   }
