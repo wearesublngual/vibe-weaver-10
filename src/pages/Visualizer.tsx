@@ -44,7 +44,6 @@ const Visualizer = () => {
       if (e.key === 'd' || e.key === 'D') {
         setShowDebug(prev => !prev);
       }
-      // H key is now handled by drawer internally
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);

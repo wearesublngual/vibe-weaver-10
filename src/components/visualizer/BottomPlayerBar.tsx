@@ -4,6 +4,7 @@
  */
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import { Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Drawer, DrawerContent, DrawerTrigger } from "@/components/ui/drawer";
@@ -69,6 +70,7 @@ const BottomPlayerBar = ({
   const [drawerOpen, setDrawerOpen] = useState(true);
   const [selectedPreset, setSelectedPreset] = useState<number>(DEFAULT_PRESET_INDEX);
   const [isLoadingImage, setIsLoadingImage] = useState(false);
+  const [isHidden, setIsHidden] = useState(false);
   
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -154,6 +156,24 @@ const BottomPlayerBar = ({
       loadImage(PRESET_IMAGES[DEFAULT_PRESET_INDEX].src, true, DEFAULT_PRESET_INDEX);
     }
   }, [loadImage, currentImage]);
+
+  // H key handler for hide/show
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      
+      if (e.key === 'h' || e.key === 'H') {
+        if (isDesktop) {
+          setIsHidden(prev => !prev);
+        } else {
+          setDrawerOpen(prev => !prev);
+        }
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isDesktop]);
 
   // Handle file upload
   const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -313,6 +333,28 @@ const BottomPlayerBar = ({
         ))}
       </div>
 
+      {/* DOSAGE Slider - Higher priority, above image selection */}
+      <div className="border-t border-phosphor/20 pt-4" data-vaul-no-drag>
+        <div className="flex items-center justify-between mb-2">
+          <label className="font-mono text-xs font-bold text-phosphor">
+            DOSAGE
+          </label>
+          <span className="font-mono text-xs text-signal">
+            {(params.dose * 100).toFixed(0)}%
+          </span>
+        </div>
+        <Slider
+          value={[params.dose]}
+          onValueChange={([v]) => onParamChange('dose', v)}
+          max={1}
+          step={0.01}
+          className="cursor-pointer"
+        />
+        <p className="mt-1 font-mono text-[10px] text-muted-foreground/60">
+          how many milligrams of SOMA to take
+        </p>
+      </div>
+
       {/* Image Selection */}
       <div className="border-t border-phosphor/20 pt-4">
         <div className="flex items-center justify-between mb-2">
@@ -369,28 +411,6 @@ const BottomPlayerBar = ({
 
         <p className="font-mono text-[9px] text-muted-foreground/50 text-center mt-1">
           your reality substrate
-        </p>
-      </div>
-
-      {/* DOSAGE Slider */}
-      <div className="border-t border-phosphor/20 pt-4">
-        <div className="flex items-center justify-between mb-2">
-          <label className="font-mono text-xs font-bold text-phosphor">
-            DOSAGE
-          </label>
-          <span className="font-mono text-xs text-signal">
-            {(params.dose * 100).toFixed(0)}%
-          </span>
-        </div>
-        <Slider
-          value={[params.dose]}
-          onValueChange={([v]) => onParamChange('dose', v)}
-          max={1}
-          step={0.01}
-          className="cursor-pointer"
-        />
-        <p className="mt-1 font-mono text-[10px] text-muted-foreground/60">
-          how many milligrams to take
         </p>
       </div>
 
@@ -465,6 +485,20 @@ const BottomPlayerBar = ({
 
   // Desktop: Left docked panel
   if (isDesktop) {
+    if (isHidden) {
+      return (
+        <Button
+          onClick={() => setIsHidden(false)}
+          variant="outline"
+          size="sm"
+          className="fixed left-4 bottom-4 z-50 border-phosphor/30 font-mono text-xs hover:border-phosphor hover:bg-card"
+        >
+          <Eye className="mr-2 h-4 w-4" />
+          Show Controls (H)
+        </Button>
+      );
+    }
+    
     return (
       <div className="fixed left-0 top-[52px] bottom-0 w-80 z-50 border-r border-phosphor/30 bg-card/95 backdrop-blur-md overflow-y-auto">
         <div className="px-4 py-6">
