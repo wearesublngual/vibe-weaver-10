@@ -5,13 +5,12 @@ import { ArrowLeft } from "lucide-react";
 import { Link } from "react-router-dom";
 import WebGLCanvas from "@/components/visualizer/WebGLCanvas";
 import BottomPlayerBar from "@/components/visualizer/BottomPlayerBar";
-import ImagePickerButton from "@/components/visualizer/ImagePickerButton";
 import DebugOverlay from "@/components/visualizer/DebugOverlay";
 import { encodeSeed, decodeSeed } from "@/lib/seed-generator";
 import { VisualizerParams, DEFAULT_PARAMS, AudioEffectParams, DEFAULT_AUDIO_PARAMS } from "@/visualizers/types";
 import { AudioEffectsChain } from "@/visualizers/audio-effects-chain";
 import { useToast } from "@/hooks/use-toast";
-
+import { useBreakpoint } from "@/hooks/use-breakpoint";
 const Visualizer = () => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [seed, setSeed] = useState<string>("");
@@ -153,13 +152,11 @@ const Visualizer = () => {
           </span>
         </div>
 
-        <ImagePickerButton 
-          onImageLoad={handleImageLoad} 
-          currentImage={sourceImage} 
-        />
+        {/* Empty div for layout balance since image picker moved to player bar */}
+        <div className="w-10" />
       </motion.div>
 
-      {/* Bottom Docked Player */}
+      {/* Docked Player - Left panel on desktop, bottom drawer on mobile/tablet */}
       <BottomPlayerBar
         onAudioInit={handleAudioInit}
         audioParams={audioParams}
@@ -174,6 +171,8 @@ const Visualizer = () => {
         onSeedInputChange={setSeedInput}
         isPlaying={isPlaying}
         setIsPlaying={setIsPlaying}
+        onImageLoad={handleImageLoad}
+        currentImage={sourceImage}
       />
     </div>
   );
