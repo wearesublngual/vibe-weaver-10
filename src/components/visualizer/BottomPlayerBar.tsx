@@ -243,7 +243,7 @@ const BottomPlayerBar = ({
                       Play
                     </>}
                 </Button>
-                <Button onClick={handleNext} disabled={!currentTrack} variant="outline" size="sm" className="border-phosphor/30 font-mono text-foreground hover:border-phosphor hover:bg-card">
+                <Button onClick={handleNext} disabled={!currentTrack} variant="outline" size="sm" className="border-signal bg-signal/10 font-mono text-signal hover:border-signal hover:bg-signal/20">
                   <SkipForward className="h-4 w-4" />
                 </Button>
                 <Button onClick={() => setShowPowerControls(!showPowerControls)} variant={showPowerControls ? "default" : "outline"} size="sm" className={showPowerControls ? "bg-phosphor text-void hover:bg-phosphor/90" : "border-phosphor/30 font-mono text-foreground hover:border-phosphor hover:bg-card"}>
