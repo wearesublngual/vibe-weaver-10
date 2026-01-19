@@ -42,6 +42,11 @@ export class AudioAnalyzer {
   private maxObservedEnergy = 0.1;
   private gainDecay = 0.999; // Slowly forget max
   
+  // FFT frozen detection
+  private lastChecksum = 0;
+  private frozenFrameCount = 0;
+  private isFrozen = false;
+  
   constructor() {}
   
   setAnalyser(analyser: AnalyserNode | null) {
@@ -62,6 +67,27 @@ export class AudioAnalyzer {
     }
     
     this.analyser.getByteFrequencyData(this.dataArray as Uint8Array<ArrayBuffer>);
+    
+    // FFT frozen detection: compute checksum of first 64 bins
+    let checksum = 0;
+    for (let i = 0; i < Math.min(64, this.dataArray.length); i++) {
+      checksum += this.dataArray[i];
+    }
+    
+    if (checksum === this.lastChecksum) {
+      this.frozenFrameCount++;
+      if (this.frozenFrameCount > 60 && !this.isFrozen) { // ~1 second frozen
+        this.isFrozen = true;
+        console.warn('[AudioAnalyzer] FFT data appears frozen! Checksum:', checksum, 'Frames:', this.frozenFrameCount);
+      }
+    } else {
+      if (this.isFrozen) {
+        console.log('[AudioAnalyzer] FFT data resumed updating');
+      }
+      this.frozenFrameCount = 0;
+      this.isFrozen = false;
+    }
+    this.lastChecksum = checksum;
     
     // Store previous values for velocity calculation
     this.prevBass = this.bass;
@@ -203,5 +229,15 @@ export class AudioAnalyzer {
   // Debug method to visualize audio data
   getDebugInfo(): string {
     return `B:${this.bass.toFixed(2)} LM:${this.lowMid.toFixed(2)} M:${this.mid.toFixed(2)} H:${this.high.toFixed(2)} E:${this.energy.toFixed(2)} Flux:${this.spectralFlux.toFixed(2)}`;
+  }
+  
+  // Check if FFT data is frozen
+  getIsFrozen(): boolean {
+    return this.isFrozen;
+  }
+  
+  // Get spectral flux for debug display
+  getSpectralFlux(): number {
+    return this.spectralFlux;
   }
 }

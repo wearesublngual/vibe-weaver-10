@@ -80,6 +80,21 @@ const BottomPlayerBar = ({
     }
     animationRef.current = requestAnimationFrame(updateLoop);
   }, []);
+  // Helper to ensure AudioContext is running - must be called synchronously in user gesture
+  const ensureAudioContextRunning = async () => {
+    if (!audioContextRef.current) return;
+    
+    if (audioContextRef.current.state === "suspended") {
+      console.log('[AudioChain] Resuming suspended AudioContext...');
+      try {
+        await audioContextRef.current.resume();
+        console.log('[AudioChain] AudioContext resumed, state:', audioContextRef.current.state);
+      } catch (err) {
+        console.error('[AudioChain] Failed to resume AudioContext:', err);
+      }
+    }
+  };
+
   const initAudioContext = () => {
     if (!audioRef.current || audioContextRef.current) return;
     
@@ -88,9 +103,16 @@ const BottomPlayerBar = ({
     const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
     console.log('[AudioChain] AudioContext created, state:', audioContext.state);
     
+    // CRITICAL: Resume immediately during user gesture
+    if (audioContext.state === "suspended") {
+      audioContext.resume().then(() => {
+        console.log('[AudioChain] AudioContext resumed during init, state:', audioContext.state);
+      });
+    }
+    
     const analyser = audioContext.createAnalyser();
-    analyser.fftSize = 1024;
-    analyser.smoothingTimeConstant = 0.8;
+    analyser.fftSize = 2048; // Increased for better frequency resolution
+    analyser.smoothingTimeConstant = 0.4; // Reduced for more responsive updates
     console.log('[AudioChain] Analyser created, fftSize:', analyser.fftSize, 'frequencyBinCount:', analyser.frequencyBinCount);
     
     const effectsChain = new AudioEffectsChain(audioContext);
@@ -114,35 +136,46 @@ const BottomPlayerBar = ({
     console.log('[AudioChain] Calling onAudioInit with analyser');
     onAudioInit(audioContext, analyser, effectsChain);
   };
-  const playTrack = (track: Track) => {
+
+  const playTrack = async (track: Track) => {
     if (!audioRef.current) return;
+    
     setCurrentTrack(track);
     audioRef.current.src = track.file;
     audioRef.current.load();
+    
     if (!audioContextRef.current) {
       initAudioContext();
     }
-    audioRef.current.play().then(() => {
+    
+    // CRITICAL: Resume AudioContext BEFORE playing - must happen in user gesture
+    await ensureAudioContextRunning();
+    
+    try {
+      await audioRef.current.play();
       setIsPlaying(true);
-      if (audioContextRef.current?.state === "suspended") {
-        audioContextRef.current.resume();
-      }
-    }).catch(err => {
+      console.log('[AudioChain] Playback started, AudioContext state:', audioContextRef.current?.state);
+    } catch (err) {
       console.error("Playback error:", err);
-    });
+    }
   };
-  const togglePlay = () => {
+  const togglePlay = async () => {
     if (!audioRef.current) return;
+    
     if (isPlaying) {
       audioRef.current.pause();
       setIsPlaying(false);
     } else {
-      audioRef.current.play().then(() => {
+      // CRITICAL: Resume AudioContext BEFORE playing
+      await ensureAudioContextRunning();
+      
+      try {
+        await audioRef.current.play();
         setIsPlaying(true);
-        if (audioContextRef.current?.state === "suspended") {
-          audioContextRef.current.resume();
-        }
-      });
+        console.log('[AudioChain] Resumed playback, AudioContext state:', audioContextRef.current?.state);
+      } catch (err) {
+        console.error("Playback error:", err);
+      }
     }
   };
   const handleNext = () => {

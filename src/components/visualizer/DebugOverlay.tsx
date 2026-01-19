@@ -6,6 +6,7 @@ import { AudioEffectsChain } from "@/visualizers/audio-effects-chain";
 interface DebugOverlayProps {
   params: VisualizerParams;
   analyser: AnalyserNode | null;
+  audioContext?: AudioContext | null;
   audioParams?: AudioEffectParams;
   effectsChain?: AudioEffectsChain | null;
 }
@@ -74,12 +75,15 @@ const MiniCurve = ({ fn, currentX }: { fn: (x: number) => number; currentX: numb
   );
 };
 
-const DebugOverlay = ({ params, analyser, audioParams = DEFAULT_AUDIO_PARAMS, effectsChain }: DebugOverlayProps) => {
+const DebugOverlay = ({ params, analyser, audioContext, audioParams = DEFAULT_AUDIO_PARAMS, effectsChain }: DebugOverlayProps) => {
   const [audioData, setAudioData] = useState({
     bass: 0, lowMid: 0, mid: 0, high: 0, energy: 0, beatIntensity: 0
   });
   const [beatFlash, setBeatFlash] = useState(false);
   const [effectDebug, setEffectDebug] = useState<any>(null);
+  const [fftFrozen, setFftFrozen] = useState(false);
+  const [spectralFlux, setSpectralFlux] = useState(0);
+  const [contextState, setContextState] = useState<string>("N/A");
   const analyzerRef = useRef<AudioAnalyzer | null>(null);
   const frameRef = useRef<number>(0);
   
@@ -101,6 +105,8 @@ const DebugOverlay = ({ params, analyser, audioParams = DEFAULT_AUDIO_PARAMS, ef
       if (analyzerRef.current) {
         const data = analyzerRef.current.analyze();
         setAudioData(data);
+        setFftFrozen(analyzerRef.current.getIsFrozen());
+        setSpectralFlux(analyzerRef.current.getSpectralFlux());
         
         // Flash on beat
         if (data.beatIntensity > 0.7) {
@@ -114,12 +120,17 @@ const DebugOverlay = ({ params, analyser, audioParams = DEFAULT_AUDIO_PARAMS, ef
         setEffectDebug(effectsChain.getDebugValues());
       }
       
+      // Update AudioContext state
+      if (audioContext) {
+        setContextState(audioContext.state);
+      }
+      
       frameRef.current = requestAnimationFrame(update);
     };
     
     frameRef.current = requestAnimationFrame(update);
     return () => cancelAnimationFrame(frameRef.current);
-  }, [effectsChain]);
+  }, [effectsChain, audioContext]);
   
   // Compute timing variables (matching shader logic)
   const timingVars = {
@@ -145,7 +156,23 @@ const DebugOverlay = ({ params, analyser, audioParams = DEFAULT_AUDIO_PARAMS, ef
       <div className="font-mono text-[10px] bg-void/95 border border-phosphor/30 rounded p-4 backdrop-blur-sm w-[700px] max-h-[85vh] overflow-y-auto pointer-events-auto">
         <div className="flex items-center justify-between mb-3 border-b border-phosphor/20 pb-2">
           <span className="text-phosphor font-bold text-xs">DEBUG OVERLAY [D to hide]</span>
-          <div className={`w-3 h-3 rounded-full transition-all ${beatFlash ? 'bg-red-500 scale-125' : 'bg-void border border-phosphor/30'}`} />
+          <div className="flex items-center gap-2">
+            {/* AudioContext State */}
+            <span className={`text-[9px] px-1.5 py-0.5 rounded ${
+              contextState === 'running' ? 'bg-green-500/20 text-green-400' :
+              contextState === 'suspended' ? 'bg-yellow-500/20 text-yellow-400' :
+              'bg-red-500/20 text-red-400'
+            }`}>
+              CTX: {contextState}
+            </span>
+            {/* FFT Frozen Warning */}
+            {fftFrozen && (
+              <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 animate-pulse">
+                FFT FROZEN
+              </span>
+            )}
+            <div className={`w-3 h-3 rounded-full transition-all ${beatFlash ? 'bg-red-500 scale-125' : 'bg-void border border-phosphor/30'}`} />
+          </div>
         </div>
         
         {/* Two column layout */}
@@ -196,6 +223,13 @@ const DebugOverlay = ({ params, analyser, audioParams = DEFAULT_AUDIO_PARAMS, ef
                   <div className="flex items-center gap-2">
                     <span className="text-phosphor w-8 text-right">{audioData.beatIntensity.toFixed(2)}</span>
                     <MiniBar value={audioData.beatIntensity} color="bg-pink-500" />
+                  </div>
+                </div>
+                <div className="flex items-center justify-between border-t border-phosphor/10 pt-1 mt-1">
+                  <span className="text-muted-foreground">Flux</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-phosphor w-8 text-right">{spectralFlux.toFixed(2)}</span>
+                    <MiniBar value={spectralFlux} max={0.5} color="bg-white/70" />
                   </div>
                 </div>
               </div>
