@@ -144,7 +144,7 @@ const BottomPlayerBar = ({
                 <div className="flex items-center gap-3">
                   <ChevronUp className="h-4 w-4 text-phosphor animate-pulse" />
                   <span className="font-mono text-xs text-muted-foreground">SOMA</span>
-                  {currentTrack && <span className="font-mono text-xs text-foreground truncate max-w-[200px]">
+                  {currentTrack && <span className="font-mono text-xs text-foreground">
                       {currentTrack.title}
                     </span>}
                 </div>
