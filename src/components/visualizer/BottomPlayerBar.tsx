@@ -217,7 +217,7 @@ const BottomPlayerBar = ({
                 </Button>
                 <Button onClick={() => setShowPowerControls(!showPowerControls)} variant={showPowerControls ? "default" : "outline"} size="sm" className={showPowerControls ? "bg-phosphor text-void hover:bg-phosphor/90" : "border-phosphor/30 font-mono text-foreground hover:border-phosphor hover:bg-card"}>
                   <Settings2 className="h-4 w-4 mr-1" />
-                  Tune
+                  Tune Dose
                 </Button>
               </div>
 
