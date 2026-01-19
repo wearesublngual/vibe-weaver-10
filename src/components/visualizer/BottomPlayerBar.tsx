@@ -197,7 +197,7 @@ const BottomPlayerBar = ({
                 </div>
                 <Slider value={[params.dose]} onValueChange={([v]) => onParamChange('dose', v)} max={1} step={0.01} className="cursor-pointer" />
                 <p className="mt-1 font-mono text-[10px] text-muted-foreground/60">
-                  how many milligrams to take
+                  how many milligrams of SOMA to take
                 </p>
               </div>
 
