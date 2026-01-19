@@ -161,7 +161,7 @@ const BottomPlayerBar = ({
 
             <div className="px-4 pb-6 space-y-4 overflow-y-auto max-h-[calc(85vh-60px)]">
               {/* Album Header */}
-              <div className="text-center pb-2">
+              <div className="text-left pb-2">
                 <div className="font-mono text-[10px] text-muted-foreground tracking-widest">
                   SOMA // SUBLINGUAL RADIO
                 </div>
