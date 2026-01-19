@@ -52,10 +52,12 @@ const Visualizer = () => {
   }, []);
 
   const handleAudioInit = (context: AudioContext, analyserNode: AnalyserNode, chain: AudioEffectsChain) => {
+    console.log('[Visualizer] handleAudioInit called with analyser:', analyserNode ? 'valid' : 'null');
     setAudioContext(context);
     setAnalyser(analyserNode);
     setEffectsChain(chain);
     setIsPlaying(true);
+    console.log('[Visualizer] Audio state updated, analyser passed to WebGLCanvas');
   };
 
   const handleImageLoad = (image: HTMLImageElement) => {
