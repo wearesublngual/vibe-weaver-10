@@ -6,8 +6,8 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
-import { Drawer, DrawerContent, DrawerTrigger } from "@/components/ui/drawer";
-import { Play, Pause, SkipForward, Settings2, ChevronUp } from "lucide-react";
+import { Drawer, DrawerContent, DrawerTrigger, DrawerClose } from "@/components/ui/drawer";
+import { Play, Pause, SkipForward, Settings2, ChevronUp, X } from "lucide-react";
 import { tracks, ALBUM_TITLE, Track } from "@/lib/soma-tracks";
 import { AudioEffectsChain } from "@/visualizers/audio-effects-chain";
 import { AudioEffectParams, DEFAULT_AUDIO_PARAMS, VisualizerParams } from "@/visualizers/types";
@@ -136,7 +136,7 @@ const BottomPlayerBar = ({
     playTrack(tracks[nextIndex]);
   };
   return <>
-      <Drawer open={drawerOpen} onOpenChange={setDrawerOpen}>
+      <Drawer open={drawerOpen} onOpenChange={setDrawerOpen} handleOnly>
         <div className="fixed bottom-0 left-0 right-0 z-50">
           {/* Collapsed mini bar when drawer is closed */}
           {!drawerOpen && <DrawerTrigger asChild>
@@ -156,12 +156,9 @@ const BottomPlayerBar = ({
             </DrawerTrigger>}
 
           <DrawerContent className="border-t border-phosphor/30 bg-card/95 backdrop-blur-md max-h-[85vh]">
-            {/* Drawer Handle */}
-            <div className="mx-auto w-12 h-1.5 flex-shrink-0 rounded-full bg-phosphor/30 my-3" />
-
-            <div className="px-4 pb-6 space-y-4 overflow-y-auto max-h-[calc(85vh-60px)]">
-              {/* Album Header */}
-              <div className="text-left pb-2">
+            {/* Header with Close Button */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-phosphor/20">
+              <div>
                 <div className="font-mono text-[10px] text-muted-foreground tracking-widest">
                   SOMA // SUBLINGUAL RADIO
                 </div>
@@ -169,6 +166,14 @@ const BottomPlayerBar = ({
                   {ALBUM_TITLE}
                 </h2>
               </div>
+              <DrawerClose asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-phosphor/10">
+                  <X className="h-4 w-4" />
+                </Button>
+              </DrawerClose>
+            </div>
+
+            <div className="px-4 pb-6 space-y-4 overflow-y-auto max-h-[calc(85vh-80px)]">
 
               {/* Question/Track List */}
               <div className="space-y-2">
