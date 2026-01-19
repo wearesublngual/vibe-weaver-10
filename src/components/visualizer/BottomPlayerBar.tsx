@@ -82,20 +82,36 @@ const BottomPlayerBar = ({
   }, []);
   const initAudioContext = () => {
     if (!audioRef.current || audioContextRef.current) return;
+    
+    console.log('[AudioChain] Initializing audio context...');
+    
     const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+    console.log('[AudioChain] AudioContext created, state:', audioContext.state);
+    
     const analyser = audioContext.createAnalyser();
     analyser.fftSize = 1024;
+    analyser.smoothingTimeConstant = 0.8;
+    console.log('[AudioChain] Analyser created, fftSize:', analyser.fftSize, 'frequencyBinCount:', analyser.frequencyBinCount);
+    
     const effectsChain = new AudioEffectsChain(audioContext);
     effectsChain.setParams(audioParams);
+    
     const source = audioContext.createMediaElementSource(audioRef.current);
     sourceRef.current = source;
+    
+    // Wire up: source -> effects -> analyser -> destination
     source.connect(effectsChain.getInput());
     effectsChain.getOutput().connect(analyser);
     analyser.connect(audioContext.destination);
+    
+    console.log('[AudioChain] Audio chain connected: source -> effects -> analyser -> destination');
+    
     audioContextRef.current = audioContext;
     analyserRef.current = analyser;
     effectsChainRef.current = effectsChain;
     updateLoop();
+    
+    console.log('[AudioChain] Calling onAudioInit with analyser');
     onAudioInit(audioContext, analyser, effectsChain);
   };
   const playTrack = (track: Track) => {

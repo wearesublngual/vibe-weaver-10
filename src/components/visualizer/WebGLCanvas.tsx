@@ -30,6 +30,7 @@ const WebGLCanvas = ({ seed, params, analyser, imageSource }: WebGLCanvasProps) 
   
   // Update audio analyzer when analyser node changes
   useEffect(() => {
+    console.log('[WebGLCanvas] Analyser node changed:', analyser ? `valid (binCount: ${analyser.frequencyBinCount})` : 'null');
     audioAnalyzerRef.current.setAnalyser(analyser);
   }, [analyser]);
   
@@ -48,6 +49,7 @@ const WebGLCanvas = ({ seed, params, analyser, imageSource }: WebGLCanvasProps) 
   }, [imageSource]);
   
   // Animation loop
+  const frameCountRef = useRef(0);
   const animate = useCallback((currentTime: number) => {
     if (!engineRef.current?.isInitialized()) {
       animationRef.current = requestAnimationFrame(animate);
@@ -60,6 +62,19 @@ const WebGLCanvas = ({ seed, params, analyser, imageSource }: WebGLCanvasProps) 
     
     // Get audio data
     const audioData = audioAnalyzerRef.current.analyze();
+    
+    // Log audio data every 60 frames (~1 second)
+    frameCountRef.current++;
+    if (frameCountRef.current % 60 === 0) {
+      console.log('[WebGLCanvas] Audio data:', {
+        bass: audioData.bass.toFixed(3),
+        mid: audioData.mid.toFixed(3),
+        high: audioData.high.toFixed(3),
+        energy: audioData.energy.toFixed(3),
+        beatIntensity: audioData.beatIntensity.toFixed(3),
+        beatDetected: audioData.beatDetected
+      });
+    }
     
     // Update and render
     engineRef.current.update(audioData, paramsRef.current, deltaTime);

@@ -49,8 +49,10 @@ export class AudioAnalyzer {
     if (analyser) {
       this.dataArray = new Uint8Array(analyser.frequencyBinCount);
       this.prevSpectrum = new Array(analyser.frequencyBinCount).fill(0);
+      console.log('[AudioAnalyzer] Analyser set, frequencyBinCount:', analyser.frequencyBinCount);
     } else {
       this.dataArray = null;
+      console.log('[AudioAnalyzer] Analyser cleared (null)');
     }
   }
   
