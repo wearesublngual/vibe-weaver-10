@@ -128,7 +128,8 @@ const Visualizer = () => {
       {showDebug && (
         <DebugOverlay 
           params={params} 
-          analyser={analyser} 
+          analyser={analyser}
+          audioContext={audioContext}
           audioParams={audioParams} 
           effectsChain={effectsChain} 
         />
