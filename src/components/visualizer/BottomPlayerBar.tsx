@@ -139,21 +139,47 @@ const BottomPlayerBar = ({
       <Drawer open={drawerOpen} onOpenChange={setDrawerOpen} handleOnly>
         <div className="fixed bottom-0 left-0 right-0 z-50">
           {/* Collapsed mini bar when drawer is closed */}
-          {!drawerOpen && <DrawerTrigger asChild>
-              <button className="w-full border-t border-phosphor/20 bg-card/95 backdrop-blur-md p-3 flex items-center justify-between hover:bg-card transition-colors">
-                <div className="flex items-center gap-3">
+          {!drawerOpen && (
+            <div className="w-full border-t border-phosphor/20 bg-card/95 backdrop-blur-md p-3 flex items-center justify-between">
+              {/* Left - Expand trigger */}
+              <DrawerTrigger asChild>
+                <button className="flex items-center gap-3 hover:text-phosphor transition-colors">
                   <ChevronUp className="h-4 w-4 text-phosphor animate-pulse" />
-                  <span className="font-mono text-xs text-muted-foreground">SOMA</span>
-                  {currentTrack && <span className="font-mono text-xs text-foreground">
-                      {currentTrack.title}
-                    </span>}
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="font-mono text-xs text-signal">DOSE {(params.dose * 100).toFixed(0)}%</span>
-                  {isPlaying && <div className="h-2 w-2 rounded-full bg-phosphor animate-pulse" />}
-                </div>
-              </button>
-            </DrawerTrigger>}
+                  <span className="font-mono text-xs text-foreground">
+                    {currentTrack ? currentTrack.title : "SELECT A QUESTION"}
+                  </span>
+                </button>
+              </DrawerTrigger>
+
+              {/* Center - Media Controls */}
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-foreground hover:text-phosphor hover:bg-phosphor/10"
+                  onClick={(e) => { e.stopPropagation(); togglePlay(); }}
+                  disabled={!currentTrack}
+                >
+                  {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-foreground hover:text-phosphor hover:bg-phosphor/10"
+                  onClick={(e) => { e.stopPropagation(); handleNext(); }}
+                  disabled={!currentTrack}
+                >
+                  <SkipForward className="h-4 w-4" />
+                </Button>
+              </div>
+
+              {/* Right - Status */}
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-xs text-signal">DOSE {(params.dose * 100).toFixed(0)}%</span>
+                {isPlaying && <div className="h-2 w-2 rounded-full bg-phosphor animate-pulse" />}
+              </div>
+            </div>
+          )}
 
           <DrawerContent className="border-t border-phosphor/30 bg-card/95 backdrop-blur-md max-h-[85vh]">
             {/* Header with Close Button */}
