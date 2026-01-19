@@ -173,7 +173,7 @@ const BottomPlayerBar = ({
               </DrawerClose>
             </div>
 
-            <div className="px-4 pb-6 space-y-4 overflow-y-auto max-h-[calc(85vh-80px)]">
+            <div className="px-4 pt-4 pb-6 space-y-6 overflow-y-auto max-h-[calc(85vh-80px)]">
 
               {/* Question/Track List */}
               <div className="space-y-2">
