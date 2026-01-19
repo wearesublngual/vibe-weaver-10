@@ -7,7 +7,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
-import { Drawer, DrawerContent, DrawerTrigger } from "@/components/ui/drawer";
+import { Drawer, DrawerContent, DrawerTrigger, DrawerHandle } from "@/components/ui/drawer";
 import { Play, Pause, SkipForward, Settings2, ChevronUp, Upload } from "lucide-react";
 import { tracks, ALBUM_TITLE, Track } from "@/lib/soma-tracks";
 import { AudioEffectsChain } from "@/visualizers/audio-effects-chain";
@@ -510,7 +510,7 @@ const BottomPlayerBar = ({
 
   // Mobile/Tablet: Bottom drawer
   return (
-    <Drawer open={drawerOpen} onOpenChange={setDrawerOpen}>
+    <Drawer open={drawerOpen} onOpenChange={setDrawerOpen} handleOnly>
       <div className="fixed bottom-0 left-0 right-0 z-50">
         {/* Collapsed mini bar when drawer is closed */}
         {!drawerOpen && (
@@ -534,8 +534,8 @@ const BottomPlayerBar = ({
         )}
 
         <DrawerContent className="border-t border-phosphor/30 bg-card/95 backdrop-blur-md max-h-[85vh]">
-          {/* Drawer Handle */}
-          <div className="mx-auto w-12 h-1.5 flex-shrink-0 rounded-full bg-phosphor/30 my-3" />
+          {/* Real Vaul Handle for handleOnly mode */}
+          <DrawerHandle className="mx-auto w-12 h-1.5 flex-shrink-0 rounded-full bg-phosphor/30 my-3" />
 
           <div className="px-4 pb-6 overflow-y-auto max-h-[calc(85vh-60px)]">
             <PlayerContent />
