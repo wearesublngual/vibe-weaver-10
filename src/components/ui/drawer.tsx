@@ -14,19 +14,6 @@ const DrawerPortal = DrawerPrimitive.Portal;
 
 const DrawerClose = DrawerPrimitive.Close;
 
-// Real handle component for handleOnly mode
-const DrawerHandle = React.forwardRef<
-  React.ElementRef<typeof DrawerPrimitive.Handle>,
-  React.ComponentPropsWithoutRef<typeof DrawerPrimitive.Handle>
->(({ className, ...props }, ref) => (
-  <DrawerPrimitive.Handle
-    ref={ref}
-    className={cn("mx-auto mt-4 h-2 w-[100px] rounded-full bg-muted", className)}
-    {...props}
-  />
-));
-DrawerHandle.displayName = "DrawerHandle";
-
 const DrawerOverlay = React.forwardRef<
   React.ElementRef<typeof DrawerPrimitive.Overlay>,
   React.ComponentPropsWithoutRef<typeof DrawerPrimitive.Overlay>
@@ -49,6 +36,7 @@ const DrawerContent = React.forwardRef<
       )}
       {...props}
     >
+      <div className="mx-auto mt-4 h-2 w-[100px] rounded-full bg-muted" />
       {children}
     </DrawerPrimitive.Content>
   </DrawerPortal>
@@ -96,5 +84,4 @@ export {
   DrawerFooter,
   DrawerTitle,
   DrawerDescription,
-  DrawerHandle,
 };

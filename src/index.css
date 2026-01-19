@@ -99,20 +99,6 @@ All colors MUST be HSL.
     }
   }
 
-  @keyframes color-wave {
-    0%, 100% { 
-      color: hsl(var(--muted-foreground));
-    }
-    50% { 
-      color: hsl(var(--phosphor));
-      text-shadow: 0 0 8px hsl(var(--phosphor) / 0.6);
-    }
-  }
-
-  .animate-color-wave {
-    animation: color-wave 2.5s ease-in-out infinite;
-  }
-
   @keyframes scan-line {
     0% { transform: translateY(-100%); }
     100% { transform: translateY(100vh); }
